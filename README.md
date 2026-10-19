@@ -47,7 +47,7 @@ python scripts/tune_params.py           # per-class params (calib only)
 python scripts/run_eval.py              # baseline vs adaptive on test splits
 python scripts/run_ablations.py         # component/feature/selector ablations
 python scripts/make_figures.py          # all report figures
-python -m pytest                        # 43 tests
+python -m pytest                        # full test suite
 ```
 
 One command (PowerShell):
@@ -66,6 +66,8 @@ streamlit run app/app.py
 
 * **SOTS / RESIDE** — 542 unique hazy/clear pairs from indoor + outdoor SOTS.
   Split by unique clear scene: **299 calib / 243 test**; no scene leaks between splits.
+  Automatic source: `https://huggingface.co/datasets/desonglll/reside-SOTS` (SOTS.zip);
+  `scripts/download_data.py` also prints manual instructions if the download fails.
 * **RTTS** — real RTTS is not redistributed here. If you place real images in
   `data/RTTS/`, they are used automatically; otherwise `prepare_data.py` generates a
   synthetic RTTS-style no-reference set (48 images) with the scattering model.

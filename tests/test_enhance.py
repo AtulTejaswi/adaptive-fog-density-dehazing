@@ -17,6 +17,11 @@ def test_clahe_shape_range(sample_image):
     assert rms_contrast(out) >= rms_contrast(sample_image) - 1e-3
 
 
+def test_clahe_strength_zero_is_identity(sample_image):
+    out = apply_clahe(sample_image, clip_limit=3.0, strength=0.0)
+    assert np.allclose(out, sample_image, atol=1e-4)
+
+
 def test_retinex_strength_zero_is_identity(sample_image):
     out = apply_retinex(sample_image, strength=0.0)
     assert np.allclose(out, sample_image, atol=1e-6)

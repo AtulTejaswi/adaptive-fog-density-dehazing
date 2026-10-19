@@ -64,7 +64,8 @@ required.
 
 **CLAHE.** Zuiderveld's contrast-limited adaptive histogram equalisation improves local
 contrast with a clip limit that prevents noise amplification. We apply it on the L
-channel in LAB to preserve hue and saturation.
+channel in LAB to preserve hue and saturation, and blend the equalised luminance with
+the dehazed image (strength 0.4) to avoid over-sharpening on benchmark pairs.
 
 **Retinex.** Jobson et al. model illumination as a smooth component; subtracting
 Gaussian-blurred log-luminance yields a reflectance-like image. We use multi-scale
@@ -106,6 +107,8 @@ Each class has its own `omega`, `t0`, guided-filter radius/epsilon, CLAHE clip a
 Retinex strength. Parameters are fitted on calib with a constrained two-stage search
 (omega × t0, then CLAHE clip × Retinex strength); constraints encode the physical prior
 that correction strength increases with density.
+
+![Selected parameters](../results/figures/selected_parameters.png)
 
 Optional variants used as ablations:
 
@@ -161,11 +164,13 @@ the stricter within-scene mean are reported in
 
 ### 5.2 Baseline vs adaptive
 
-<!-- RESULTS_TABLE -->
+<!-- RESULTS_TABLE_START -->
+<!-- RESULTS_TABLE_END -->
 
 ![Before/after by class](../results/figures/before_after_by_class.png)
 
-<!-- KEY_FINDINGS -->
+<!-- KEY_FINDINGS_START -->
+<!-- KEY_FINDINGS_END -->
 
 ### 5.3 Transmission maps
 
@@ -185,7 +190,8 @@ the stricter within-scene mean are reported in
 
 ![Ablations](../results/figures/ablations.png)
 
-<!-- ABLATION_TABLE -->
+<!-- ABLATION_TABLE_START -->
+<!-- ABLATION_TABLE_END -->
 
 ---
 

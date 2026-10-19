@@ -1,5 +1,7 @@
-# Data and downloads (never committed)
-data/
+# Data and downloads (never committed, except the small reproducible split file)
+data/*
+!data/splits.json
+!data/README.md
 *.zip
 *.tar
 *.tar.gz

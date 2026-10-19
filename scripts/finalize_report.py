@@ -45,6 +45,16 @@ def _pct(value: float) -> str:
     return f"{100.0 * value:.1f}%"
 
 
+def _replace_block(text: str, name: str, content: str) -> str:
+    start_tag = f"<!-- {name}_START -->"
+    end_tag = f"<!-- {name}_END -->"
+    start = text.find(start_tag)
+    end = text.find(end_tag)
+    if start != -1 and end != -1 and end > start:
+        return text[: start + len(start_tag)] + "\n" + content.strip() + "\n" + text[end:]
+    return text
+
+
 def main() -> int:
     results = resolve_path("results")
     key = json.loads((results / "key_numbers.json").read_text(encoding="utf-8"))
@@ -60,6 +70,7 @@ def main() -> int:
     table_view = table_view[keep]
     table_md = "# Results — baseline vs adaptive\n\n" + md_table(table_view) + "\n"
     (results / "results_table.md").write_text(table_md, encoding="utf-8")
+    table_md_report = md_table(table_view)
 
     # ---------------- findings --------------------------------------------
     b_psnr = _mean(per_image, "test_sots", "all", "baseline", "psnr") if "all" in set(per_image["class"]) else float("nan")
@@ -113,6 +124,7 @@ def main() -> int:
         if bits:
             findings.append("**No-reference RTTS-style set.** " + "; ".join(bits) + ".")
     runtime = pd.read_csv(results / "runtime_summary.csv") if (results / "runtime_summary.csv").exists() else None
+    ms = float("nan")
     if runtime is not None and not runtime.empty:
         sots = runtime[runtime.split == "test_sots"]
         if not sots.empty:
@@ -134,10 +146,10 @@ def main() -> int:
 
     report_path = resolve_path("report/report.md")
     report = report_path.read_text(encoding="utf-8")
-    report = report.replace("<!-- RESULTS_TABLE -->", table_md)
-    report = report.replace("<!-- KEY_FINDINGS -->", findings_md)
+    report = _replace_block(report, "RESULTS_TABLE", table_md_report)
+    report = _replace_block(report, "KEY_FINDINGS", findings_md)
     ablation_md = (results / "ablations.md").read_text(encoding="utf-8") if (results / "ablations.md").exists() else "_not available_"
-    report = report.replace("<!-- ABLATION_TABLE -->", ablation_md)
+    report = _replace_block(report, "ABLATION_TABLE", ablation_md)
     report_path.write_text(report, encoding="utf-8")
 
     readme = resolve_path("README.md")

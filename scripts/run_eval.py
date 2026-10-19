@@ -8,6 +8,7 @@ Images for figures are cached under results/images/ (gitignored).
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from datetime import date
@@ -252,7 +253,7 @@ def main() -> int:
                           "ssim": _mean("test_sots", "baseline", "ssim")},
         "adaptive_sots": {"psnr": _mean("test_sots", "adaptive", "psnr"),
                           "ssim": _mean("test_sots", "adaptive", "ssim")},
-        "runtime_ms": runtime_summary.to_dict(orient="records"),
+        "runtime_ms": json.loads(runtime_summary.to_json(orient="records")),
         "class_counts": {
             f"{split}|{cls}": int(count)
             for (split, cls), count in df[df["method"] == "adaptive"].groupby(["split", "class"]).size().items()
@@ -260,7 +261,6 @@ def main() -> int:
         "density_validation": load_json("results/density_validation_summary.json", default={}),
         "classifier": load_json("results/selector_classifier.json", default={}),
     }
-    import json
 
     with open(results_dir / "key_numbers.json", "w", encoding="utf-8") as fh:
         json.dump(key_numbers, fh, indent=2)

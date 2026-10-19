@@ -110,14 +110,18 @@ def main() -> int:
     all_rows = []
     best_by_class: dict[str, dict] = {}
     class_grids = cfg.get("class_grids", {})
+    min_omega = 0.0
+    max_t0 = 1.0
     for label, items in by_class.items():
         if not items:
             continue
         print(f"[tune] class={label} n={len(items)}")
         base_cfg = selector.params_for_class(label)
         class_grid = class_grids.get(label, {})
-        c_omegas = list(class_grid.get("omega", omegas))
-        c_t0s = list(class_grid.get("t0", t0s))
+        c_omegas = [w for w in class_grid.get("omega", omegas) if float(w) >= min_omega]
+        c_t0s = [t for t in class_grid.get("t0", t0s) if float(t) <= max_t0]
+        c_omegas = c_omegas or list(class_grid.get("omega", omegas))
+        c_t0s = c_t0s or list(class_grid.get("t0", t0s))
         if args.quick:
             c_omegas, c_t0s = c_omegas[::2], c_t0s[::2]
 
@@ -167,6 +171,8 @@ def main() -> int:
                 "n": best2["n"],
             },
         }
+        min_omega = float(best2["omega"])
+        max_t0 = float(best2["t0"])
 
     results_dir = resolve_path("results")
     results_dir.mkdir(parents=True, exist_ok=True)

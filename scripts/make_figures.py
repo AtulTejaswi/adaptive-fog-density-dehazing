@@ -324,6 +324,33 @@ def figure_runtime(results: Path, figures: Path) -> None:
     plt.close(fig)
 
 
+def figure_parameters(figures: Path) -> None:
+    params = load_params()
+    tuned = load_json(params.get("paths", {}).get("tuned_params", "config/tuned_params.json"), default={})
+    classes = tuned.get("classes", {})
+    if not classes:
+        return
+    labels = [c for c in CLASSES if c in classes]
+    omega = [classes[c].get("omega", 0.0) for c in labels]
+    t0 = [classes[c].get("t0", 0.0) for c in labels]
+    clip = [classes[c].get("clahe", {}).get("clip_limit", 0.0) for c in labels]
+    retinex = [classes[c].get("retinex", {}).get("strength", 0.0) for c in labels]
+    fig, axes = plt.subplots(1, 4, figsize=(12, 3))
+    for ax, values, title in zip(
+        axes, [omega, t0, clip, retinex],
+        ["omega (DCP strength)", "t0 (transmission floor)",
+         "CLAHE clip limit", "Retinex strength"],
+    ):
+        ax.bar(labels, values, color=[CLASS_COLORS[c] for c in labels], alpha=0.85)
+        ax.set_title(title)
+        ax.grid(alpha=0.2, axis="y")
+    fig.suptitle("Selected parameters per fog-density class (calibrated on calib only)",
+                 fontsize=11)
+    fig.tight_layout()
+    fig.savefig(figures / "selected_parameters.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate report figures")
     parser.add_argument("--splits", nargs="*", default=["test_sots", "test_rtts"])
@@ -345,6 +372,7 @@ def main() -> int:
         figure_failures(results, test_sots, params, figures)
     figure_rtts(results, records, params, figures)
     figure_metrics_by_class(results, figures)
+    figure_parameters(figures)
     figure_ablations(results, figures)
     figure_runtime(results, figures)
     print(f"[figures] wrote {len(list(figures.glob('*.png')))} figures to {figures}")

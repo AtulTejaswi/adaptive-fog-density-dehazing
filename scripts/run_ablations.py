@@ -32,7 +32,8 @@ VARIANTS = [
     {"name": "adaptive_clahe", "kind": "adaptive", "group": "component",
      "enhancement_switches": {"retinex": False, "gray_world": False}},
     {"name": "adaptive_clahe_retinex", "kind": "adaptive", "group": "component",
-     "enhancement_switches": {"gray_world": False}},
+     "enhancement_switches": {"gray_world": False},
+     "overrides": {"retinex": {"enabled": True, "strength": 0.35}}},
     {"name": "adaptive_full", "kind": "adaptive", "group": "component"},
     {"name": "density_dc_only", "kind": "adaptive", "group": "density_features",
      "feature_mask": {"entropy": False, "contrast": False}},
@@ -108,6 +109,7 @@ def main() -> int:
                     feature_mask=variant.get("feature_mask"),
                     enhancement_switches=variant.get("enhancement_switches"),
                     use_enhancement=variant.get("use_enhancement", True),
+                    overrides=variant.get("overrides"),
                 )
                 runtime = info["timing_ms"]["total"]
                 label = rec.get("class") or info.get("class", main_class)

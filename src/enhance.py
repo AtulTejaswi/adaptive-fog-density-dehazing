@@ -23,15 +23,18 @@ def _percentile_stretch(x: np.ndarray, low: float = 1.0, high: float = 99.0) -> 
 
 
 def apply_clahe(img: np.ndarray, clip_limit: float = 2.0,
-                tile_grid_size: tuple[int, int] | list[int] = (8, 8)) -> np.ndarray:
-    """CLAHE on the L channel in LAB; hue and saturation are preserved."""
+                tile_grid_size: tuple[int, int] | list[int] = (8, 8),
+                strength: float = 1.0) -> np.ndarray:
+    """CLAHE on the L channel in LAB, blended with the input by ``strength``."""
     lab = cv2.cvtColor(to_uint8(img), cv2.COLOR_RGB2LAB)
     l_chan, a_chan, b_chan = cv2.split(lab)
     tiles = (int(tile_grid_size[0]), int(tile_grid_size[1]))
     clahe = cv2.createCLAHE(clipLimit=float(max(clip_limit, 0.01)), tileGridSize=tiles)
     l_eq = clahe.apply(l_chan)
-    out = cv2.cvtColor(cv2.merge([l_eq, a_chan, b_chan]), cv2.COLOR_LAB2RGB)
-    return np.clip(out.astype(np.float32) / 255.0, 0.0, 1.0)
+    equalised = cv2.cvtColor(cv2.merge([l_eq, a_chan, b_chan]), cv2.COLOR_LAB2RGB)
+    equalised = np.clip(equalised.astype(np.float32) / 255.0, 0.0, 1.0)
+    s = float(np.clip(strength, 0.0, 1.0))
+    return np.clip((1.0 - s) * img + s * equalised, 0.0, 1.0).astype(np.float32)
 
 
 def _retinex_luminance(lum: np.ndarray, sigmas: list[float]) -> np.ndarray:
@@ -116,6 +119,7 @@ def apply_enhancements(
                 out,
                 clip_limit=step_cfg.get("clip_limit", 2.0),
                 tile_grid_size=step_cfg.get("tile_grid_size", [8, 8]),
+                strength=step_cfg.get("strength", 1.0),
             )
         elif step == "gray_world":
             out = apply_gray_world(
