@@ -5,7 +5,7 @@
     "test_sots"
   ],
   "n_images": {
-    "test_rtts": 48,
+    "test_rtts": 72,
     "test_sots": 243
   },
   "baseline_sots": {
@@ -19,29 +19,29 @@
   "runtime_ms": [
     {
       "split": "test_rtts",
-      "n": 48,
-      "density_ms": 29.1238249987,
-      "dcp_ms": 67.4823416678,
-      "enhance_ms": 92.3277791665,
-      "total_ms": 209.352197918,
-      "total_std_ms": 113.6066376726,
-      "fps": 4.7766396051
+      "n": 72,
+      "density_ms": 25.662427777,
+      "dcp_ms": 61.9128430561,
+      "enhance_ms": 69.5632736129,
+      "total_ms": 205.9190513868,
+      "total_std_ms": 111.8503130556,
+      "fps": 4.8562772277
     },
     {
       "split": "test_sots",
       "n": 243,
-      "density_ms": 28.8480065843,
-      "dcp_ms": 68.1663213996,
-      "enhance_ms": 141.3383144034,
-      "total_ms": 258.4771432099,
-      "total_std_ms": 143.1628027094,
-      "fps": 3.8688140374
+      "density_ms": 31.2658086415,
+      "dcp_ms": 74.0649551443,
+      "enhance_ms": 147.6307456789,
+      "total_ms": 273.4861082307,
+      "total_std_ms": 151.4473227964,
+      "fps": 3.6564928525
     }
   ],
   "class_counts": {
-    "test_rtts|heavy": 22,
-    "test_rtts|light": 13,
-    "test_rtts|moderate": 13,
+    "test_rtts|heavy": 20,
+    "test_rtts|light": 41,
+    "test_rtts|moderate": 11,
     "test_sots|heavy": 66,
     "test_sots|light": 85,
     "test_sots|moderate": 92
@@ -49,9 +49,9 @@
   "density_validation": {
     "n": 64,
     "n_scenes": 8,
-    "spearman_overall": 0.8978241740675941,
-    "spearman_within_scene_mean": 0.9954949584655679,
-    "spearman_within_scene_min": 0.9759000729485332,
+    "spearman_overall": 0.9074463622480381,
+    "spearman_within_scene_mean": 0.9915775541046139,
+    "spearman_within_scene_min": 0.938590635448906,
     "monotonic_scenes": 8
   },
   "classifier": {
@@ -61,7 +61,7 @@
       "light",
       "moderate"
     ],
-    "holdout_accuracy": 0.7555555555555555,
+    "holdout_accuracy": 0.7333333333333333,
     "model": "config/selector_classifier.joblib"
   }
 }

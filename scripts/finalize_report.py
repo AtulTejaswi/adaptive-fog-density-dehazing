@@ -122,7 +122,11 @@ def main() -> int:
             if not row.empty:
                 bits.append(f"{metric} delta {float(row.iloc[0]['mean_diff']):+.4f}")
         if bits:
-            findings.append("**No-reference RTTS-style set.** " + "; ".join(bits) + ".")
+            n_rtts = int(key.get("n_images", {}).get("test_rtts", 0))
+            findings.append(
+                f"**Real RTTS no-reference set ({n_rtts} images, no ground truth).** "
+                + "; ".join(bits) + "."
+            )
     runtime = pd.read_csv(results / "runtime_summary.csv") if (results / "runtime_summary.csv").exists() else None
     ms = float("nan")
     if runtime is not None and not runtime.empty:

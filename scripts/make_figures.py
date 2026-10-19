@@ -268,15 +268,17 @@ def figure_rtts(results: Path, records: list[dict], params: dict, figures: Path)
     rtts = [r for r in records if r["split"] == "test_rtts"][:4]
     if not rtts:
         return
+    is_real = rtts[0].get("source") == "rtts"
     fig, axes = plt.subplots(len(rtts), 3, figsize=(7.5, 2.2 * len(rtts)))
     if len(rtts) == 1:
         axes = np.expand_dims(axes, 0)
     for row, rec in enumerate(rtts):
         data = _image_cache(rec, params)
-        _show(axes[row, 0], data["hazy"], f"real-style hazy ({data['class']})")
+        _show(axes[row, 0], data["hazy"], f"{'real' if is_real else 'synthetic-style'} hazy ({data['class']})")
         _show(axes[row, 1], data["baseline"], "baseline")
         _show(axes[row, 2], data["adaptive"], "adaptive")
-    fig.suptitle("No-reference RTTS-style examples", fontsize=11)
+    title = "Real RTTS (RESIDE-beta) no-reference examples" if is_real else "Synthetic RTTS-style no-reference examples"
+    fig.suptitle(title, fontsize=11)
     fig.tight_layout()
     fig.savefig(figures / "qualitative_rtts.png", bbox_inches="tight")
     plt.close(fig)

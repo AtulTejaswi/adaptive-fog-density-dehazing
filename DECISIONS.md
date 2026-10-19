@@ -2,7 +2,7 @@
 
 | ID | Decision | Why | Status |
 |---|---|---|---|
-| D-00 | Course rubric/deliverables: not supplied; standard deliverables assumed (code + reproducible results + report + slides + demo) | User has not shared rubric; all standard items implemented | CLOSED - assumption |
+| D-00 | Course rubric/deliverables: not supplied; standard deliverables assumed (code + reproducible results + report + slides + demo). One-time format question (PDF/PPTX export? page limit?) is open; the committed Markdown sources can be exported if the rubric requires it | User has not shared rubric; all standard items implemented. MASTER_PROMPT_v2 asks to confirm format once | OPEN - question pending |
 | D-01 | Classical methods only (DCP, guided filter, CLAHE, Retinex, gray-world); no deep dehazing nets | Matches proposal; explainable; CPU-friendly | FINAL |
 | D-02 | Baseline = fixed-parameter DCP (omega 0.95, t0 0.1, patch 15, GF r60 eps1e-4), no enhancement | Proposal compares against fixed-param DCP | FINAL |
 | D-03 | Rule-based selector is primary; shallow classifier only as ablation | Proposal says rule-based, classifier optional | FINAL |
@@ -12,7 +12,7 @@
 | D-07 | All tunables in `config/params.yaml` | Ablations become config changes | FINAL |
 | D-08 | Demo UI: Streamlit (fallback Gradio) | Quick to build | FINAL |
 | D-09 | Real SOTS used: 542 unique clear scenes (indoor + outdoor), one hazy variant per scene; split by unique clear scene into 299 calib / 243 test | Avoids scene leakage; real benchmark pairs provide GT | FINAL |
-| D-10 | RTTS real images not redistributed; use `data/RTTS/` if supplied, otherwise a 48-image synthetic RTTS-style no-reference set | Automatic RTTS download was not available; no-reference evaluation must still run | FINAL |
+| D-10 | Real RTTS (RESIDE-beta, 72 images) is used for the no-reference check: downloaded from the Hugging Face mirror `fuhao7i/RTTS` (Apache-2.0) with `scripts/download_rtts.py` + `scripts/rtts_subset.txt`. Images are gitignored; a synthetic RTTS-style fallback keeps offline runs working and `data/splits.json` records which source was used | Obtained real no-reference data while keeping the repo light and reproducible | FINAL |
 | D-11 | Density score = 0.45 dark-channel mean + 0.30 (1 - entropy) + 0.25 (1 - contrast), percentile-normalised on calib | Complements three failure modes of DCP; weights fixed before test | FINAL |
 | D-12 | Haze classes are tertiles of the calib score distribution (t1, t2 stored in `config/calibration.json`) | Label-free, balanced calibration bins, no test leakage | FINAL |
 | D-13 | Per-class parameter search constrained to physically ordered omega ranges (light <= 0.86, moderate 0.82-0.94, heavy 0.90-0.97) | Preserves the intended density-adaptive strategy while still tuning on calib | FINAL |
@@ -29,3 +29,5 @@
 | D-24 | Report the CLAHE+Retinex trade-off honestly (higher PSNR 19.30 dB but lower SSIM 0.8840 than full 0.8896); do not claim every enhancement helps every metric | Component ablation + full-reference metrics | FINAL |
 | D-25 | Repository is `https://github.com/AtulTejaswi/adaptive-fog-density-dehazing` (private), with local history and tags preserved | MASTER_PROMPT_v2 repo-integrity check; remote created and pushed 2026-10-19 | FINAL |
 | D-26 | Run the v2 finalization audit on the existing history; do not rebuild or rewrite the frozen-params tag | MASTER_PROMPT_v2 says verify, close gaps, and keep the frozen-params boundary | FINAL |
+| D-27 | Fixed a Windows-only duplicate-RTTS bug: `data/RTTS` and `data/rtts` are the same folder on a case-insensitive filesystem, so records are de-duplicated by `os.path.normcase(resolve(path))` (144 -> 72 unique images) | `scripts/prepare_data.py`; verified by `data/splits.json` counts | FINAL |
+| D-28 | Baseline fairness is audited by `scripts/audit_baseline.py`: atmospheric-light estimator, guided-filter on/off, and native-resolution variants are compared, and three baseline examples are saved to `results/figures/baseline_sanity.png`. The headline baseline stays exactly the fixed DCP specified in D-02 | MASTER_PROMPT_v2 asks to prove the baseline is not handicapped | FINAL |

@@ -12,7 +12,7 @@ Done when: fresh clone + `pip install -r requirements.txt` + `pytest` runs.
 
 ## Phase 1 - Data
 - [x] `scripts/download_data.py`: fetch SOTS (indoor + outdoor test) and prepare a calibration subset. If auto-download is blocked, print exact manual instructions + expected folder layout in `data/README.md`.
-      (Implementation uses a scene-disjoint 299-pair SOTS calib split instead of ITS/OTS, plus a 180-image synthetic selector-training set; RTTS real images are optional and fall back to synthetic.)
+      (Scene-disjoint 299-pair SOTS calib split, a 180-image synthetic selector-training set, and 72 real RTTS images via `scripts/download_rtts.py`; synthetic RTTS-style fallback stays available offline.)
 - [x] Validate pairing: every SOTS hazy image has a clear GT. Log counts.
 - [x] Fixed splits: `data/splits.json` -> `calib` (threshold tuning), `test_sots`, `test_rtts`. Never tune on test.
 Done when: counts logged in PROGRESS.md (e.g. N calib, N SOTS, N RTTS).
@@ -90,6 +90,13 @@ Done when: params frozen and tagged.
 - [x] Slides
 - [x] README with reproduce-in-3-commands instructions
 - [x] Final: tag `v1.0`, clean repo, results CSVs committed
+
+## Phase 11 - v2 finalization / hardening (MASTER_PROMPT_v2)
+- [x] A. Repo/GitHub integrity: history, tags (`v0.1-frozen-params`, `v1.0`), remote verified; prompt committed
+- [x] B. Fresh-venv reproducibility: clean venv + `pytest` + `verify_setup.py` + full pipeline rerun reproduces headline numbers
+- [x] C. Real RTTS: 72-image RESIDE-beta subset via `scripts/download_rtts.py` + `scripts/rtts_subset.txt`; no tuning re-run
+- [x] D. Baseline fairness audit (`scripts/audit_baseline.py`) + leakage tests (`tests/test_splits_leakage.py`)
+- [x] E. Docs/figures refreshed from real RTTS; `v1.0` retagged at the final verified commit
 
 ## Risk register
 | Risk | Mitigation |

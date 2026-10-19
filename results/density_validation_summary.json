@@ -1,8 +1,8 @@
 {
   "n": 64,
   "n_scenes": 8,
-  "spearman_overall": 0.8978241740675941,
-  "spearman_within_scene_mean": 0.9954949584655679,
-  "spearman_within_scene_min": 0.9759000729485332,
+  "spearman_overall": 0.9074463622480381,
+  "spearman_within_scene_mean": 0.9915775541046139,
+  "spearman_within_scene_min": 0.938590635448906,
   "monotonic_scenes": 8
 }

@@ -5,6 +5,6 @@
     "light",
     "moderate"
   ],
-  "holdout_accuracy": 0.7555555555555555,
+  "holdout_accuracy": 0.7333333333333333,
   "model": "config/selector_classifier.joblib"
 }
