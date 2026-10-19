@@ -1,16 +1,16 @@
 # PROGRESS (live log - UPDATE THIS AFTER EVERY MEANINGFUL STEP)
 
 Last updated: 2026-10-19
-Last model/agent: DeepSeek V4.1 Flash (implementation session)
+Last model/agent: DeepSeek V4.1 Flash (v2 finalization session)
 
 ## Current status
-Phase: 10 - Complete
-Overall completion: 100%
+Phase: 10 - Finalization / hardening (MASTER_PROMPT_v2)
+Overall completion: 100% (verification in progress)
 
 ## Phase checklist
 | Phase | Name | Status |
 |---|---|---|
-| 0 | Setup | done (local git; no remote supplied) |
+| 0 | Setup | done (local git + GitHub remote `AtulTejaswi/adaptive-fog-density-dehazing`) |
 | 1 | Data | done (542 SOTS pairs: 299 calib / 243 test; 48 RTTS-style; 64 beta sweep) |
 | 2 | Preprocessing | done + tested |
 | 3 | Fog density estimation | done (Spearman 0.898 overall, 0.995 within-scene) |

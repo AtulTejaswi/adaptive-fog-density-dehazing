@@ -6,8 +6,8 @@ Rule: finish phases in order. Each phase ends with a git commit + PROGRESS.md up
 - [x] Create repo structure (see README), `requirements.txt`, `.gitignore` (ignore `data/`, `*.zip`, `__pycache__`, large results)
 - [x] `config/params.yaml` skeleton (all thresholds/params live here, never hard-coded)
 - [x] Verify environment: `python -c "import cv2, skimage, sklearn"`; fix `pip install`
-- [ ] Init git, connect remote GitHub repo, first push via `save_progress.sh`
-      (local git initialised + commits/tags made; no remote URL was supplied, so no push)
+- [x] Init git, connect remote GitHub repo, first push via `save_progress.sh`
+      (remote: https://github.com/AtulTejaswi/adaptive-fog-density-dehazing; pushed 2026-10-19)
 Done when: fresh clone + `pip install -r requirements.txt` + `pytest` runs.
 
 ## Phase 1 - Data
