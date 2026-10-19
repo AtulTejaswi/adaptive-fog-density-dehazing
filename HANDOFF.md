@@ -1,16 +1,18 @@
 # HANDOFF (overwrite at the end of every session; keep under 30 lines)
 
 ## State
-Project complete, verified and reproducible. Real SOTS: 299 calib / 243 test pairs,
-split by unique clear scene. Parameters calibrated + tuned on calib only and frozen at
-tag `v0.1-frozen-params` before testing. Real 72-image RTTS no-reference set is used
-(via `scripts/download_rtts.py` + `scripts/rtts_subset.txt`). A clean-venv rerun
-reproduced the headline numbers; baseline fairness is audited by
-`scripts/audit_baseline.py`; leakage is guarded by `tests/test_splits_leakage.py`.
+Project complete, verified and reproducible (v3 end-to-end acceptance passed; see
+`results/FINALIZATION_AUDIT.md`). Real SOTS: 299 calib / 243 test pairs, split by unique
+clear scene. Parameters calibrated + tuned on calib only and frozen at tag
+`v0.1-frozen-params` before testing. Real 72-image RTTS no-reference set is used
+(via `scripts/download_rtts.py` + `scripts/rtts_subset.txt`). Data was deleted and
+rebuilt from scratch in a clean venv and the full pipeline reproduced the headline
+numbers; baseline fairness is audited by `scripts/audit_baseline.py`; leakage is
+guarded by `tests/test_splits_leakage.py`; robustness by `tests/test_edge_cases.py`.
 
 Key results (SOTS test): adaptive **18.78 dB / 0.8896** vs baseline **15.71 dB /
 0.8263**; +3.07 dB, +0.0633 SSIM; 96.3% PSNR / 90.1% SSIM win rate. Density score vs
-beta: overall Spearman 0.907, within-scene mean 0.992. Runtime ~273 ms/image (CPU).
+beta: overall Spearman 0.907, within-scene mean 0.992. Runtime ~256 ms/image (CPU, varies by machine).
 Real 72-image RTTS: entropy gain +0.325, contrast +0.173, edge ratio +0.477 vs baseline.
 Ablations: no-enh 17.77/0.8726; CLAHE 18.18/0.8850; CLAHE+Retinex 19.30/0.8840;
 continuous selector 18.80/0.8574; classifier 18.40/0.8780.
@@ -20,9 +22,10 @@ continuous selector 18.80/0.8574; classifier 18.40/0.8780.
    `results/ablations.md`, `results/baseline_audit_summary.csv`, `report/report.md`,
    `report/slides.md`.
 2. Demo: `streamlit run app/app.py`.
-3. Data rebuild: `python scripts/download_data.py`, `python scripts/download_rtts.py`,
-   `python scripts/prepare_data.py --no-download` (no tuning needed).
+3. Data rebuild (verified from scratch): `python scripts/download_data.py`,
+   `python scripts/download_rtts.py`, `python scripts/prepare_data.py --no-download`.
 4. If changing any data/parameters, re-run the full `./run_all.ps1` and re-tag.
+5. Test suite: `python -m pytest -q` (66 tests: pipeline + splits/leakage + edge cases).
 
 ## Gotchas
 - Never tune on `test_sots` / `test_rtts`; thresholds/params are calib-only.
@@ -32,6 +35,12 @@ continuous selector 18.80/0.8574; classifier 18.40/0.8780.
 - Windows console is cp1252: avoid printing Greek symbols from scripts (files are UTF-8).
 - On Windows `data/RTTS` and `data/rtts` are the same folder; `prepare_data.py`
   de-duplicates by real path.
+- `preprocess_array` accepts 2D grayscale, `HxWx1` and `HxWx4` arrays and raises a clear
+  error for any other shape (guarded by `tests/test_edge_cases.py`).
+- Runtime is machine-dependent; `results/runtime_summary.csv` is the source of truth
+  (current run: 256 ms/image on SOTS). Do not hard-code runtime in prose.
 
 ## Files touched last session
-- All `src/`, `scripts/`, `tests/`, `app/`, `config/`, `results/` and `report/` files.
+- `tests/test_edge_cases.py` (new), `src/preprocess.py`, `README.md`, `PROGRESS.md`,
+  `HANDOFF.md`, `DECISIONS.md`, `report/report.md`, `report/slides.md`,
+  `results/FINALIZATION_AUDIT.md`, regenerated `config/*` and `results/*`.

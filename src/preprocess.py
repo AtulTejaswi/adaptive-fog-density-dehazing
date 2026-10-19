@@ -57,8 +57,12 @@ def preprocess_array(img: np.ndarray, params: dict) -> np.ndarray:
     img = np.clip(img.astype(np.float32), 0.0, 1.0)
     if img.ndim == 2:
         img = np.stack([img] * 3, axis=-1)
-    if img.shape[-1] == 4:
+    if img.ndim == 3 and img.shape[-1] == 1:
+        img = np.repeat(img, 3, axis=-1)
+    if img.ndim == 3 and img.shape[-1] == 4:
         img = img[..., :3]
+    if img.ndim != 3 or img.shape[-1] != 3:
+        raise ValueError(f"Expected a 2D grayscale or HxWx3/HxWx4 image, got shape {img.shape}")
     pp = params.get("preprocess", {})
     img = resize_long_side(img, int(pp.get("resize_long_side", 640)))
     img = np.clip(img, 0.0, 1.0)

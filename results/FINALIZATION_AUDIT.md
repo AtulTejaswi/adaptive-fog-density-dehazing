@@ -16,9 +16,10 @@ boundary was preserved.
 ## B. Fresh-environment reproducibility
 - Clean virtual environment created in a temp folder (Python 3.12.4) and
   `pip install -r requirements.txt` completed.
-- `python -m pytest -q` passes (51 tests); `scripts/verify_setup.py` reports all
-  dependencies present, splits `{calib 299, test_sots 243, test_rtts 72,
-  selector_train 180, density_validation 64}`, and calibration/tuned params found.
+- `python -m pytest -q` passes (66 tests, after adding the v3 edge-case suite);
+  `scripts/verify_setup.py` reports all dependencies present, splits `{calib 299,
+  test_sots 243, test_rtts 72, selector_train 180, density_validation 64}`, and
+  calibration/tuned params found.
 - Full pipeline (`run_all.ps1 --no-download`) rerun reproduced the headline numbers:
   - baseline SOTS PSNR/SSIM: `15.7100 / 0.8263`
   - adaptive SOTS PSNR/SSIM: `18.7750 / 0.8896`
@@ -66,3 +67,83 @@ boundary was preserved.
   same selected values (light 0.86/0.35, moderate 0.94/0.30, heavy 0.94/0.20); only the
   `created` timestamp differs, which is noted here. `v1.0` is retagged on the final
   verified commit after A–D pass.
+
+---
+
+# v3 end-to-end acceptance (MASTER_PROMPT_v3)
+
+Date: 2026-10-20. Verification only: no method or parameter was changed, and the
+frozen-params tag `v0.1-frozen-params` was not moved. All acceptance steps passed.
+
+## 1. Clean environment
+- Fresh virtual environment (`ipa-venv-v3`, Python 3.12.4) created and
+  `pip install -r requirements.txt` completed (exit 0).
+- `python scripts/verify_setup.py`: all dependencies present; splits
+  `{calib 299, test_sots 243, test_rtts 72, selector_train 180, density_validation 64}`;
+  calibration + frozen tuned params present.
+- `python -m pytest -q`: 51 passed (before the edge-case suite). Final suite: 66 passed.
+
+## 2. Data from scratch
+- Deleted `data/SOTS` and `data/RTTS` (kept `splits.json`, `README.md`); the cached SOTS
+  archive was removed first so the download path was exercised for real.
+- `python scripts/download_data.py`: downloaded the SOTS archive fresh (434.7 MB),
+  extracted it, found 542 unique SOTS pairs.
+- `python scripts/download_rtts.py`: 72/72 real RTTS images downloaded.
+- `python scripts/prepare_data.py --no-download`: reproduced the exact split counts
+  (`{calib 299, test_sots 243, test_rtts 72, selector_train 180, density_validation 64}`)
+  and `sources = {sots: real_sots, rtts: real_rtts}`.
+
+## 3. Full pipeline
+- `./run_all.ps1 --no-download` finished without errors (calibrate -> tune -> eval ->
+  ablations -> figures -> baseline audit -> finalize -> tests).
+- Calibration/validation reproduced: thresholds `t1=0.3937`, `t2=0.5885`;
+  Spearman overall `0.907`, within-scene mean `0.992` (min 0.939).
+
+## 4. Numbers vs report
+- Headline reproduced exactly: baseline `15.7100 / 0.8263`, adaptive `18.7750 / 0.8896`
+  (SOTS test, 243 pairs); PSNR +3.065 dB, SSIM +0.0633; win rates 96.3% / 90.1%.
+- Per-class deltas, RTTS no-reference deltas (+0.325 entropy, +0.173 contrast,
+  +0.477 edge), density correlations and every ablation row match `results/*.csv`.
+- Spot-check of 13 numeric claims in `report/report.md` and `report/slides.md` against
+  the CSVs: all consistent (slides intentionally omit the SSIM win-rate figure).
+- Runtime regenerated as 256 ms/image (3.9 FPS) on SOTS vs ~69 ms for fixed DCP; prose,
+  slides, README, PROGRESS and HANDOFF were updated to this machine-dependent value.
+
+## 5. Edge-case tests
+- Added `tests/test_edge_cases.py` (15 tests): 1-pixel, tiny non-square, very large
+  (2000x3000), 2D grayscale, `HxWx1`, `HxWx4`, `uint8`, grayscale PNG and RGBA PNG files,
+  pure white, pure black, haze-free, corrupt file, missing file, determinism, and
+  shape/dtype/range/finite guarantees (adaptive and baseline).
+- Bug fixed: `preprocess_array` now accepts `HxWx1` inputs and raises a clear
+  `ValueError("Expected a 2D grayscale ...")` for any other channel count (previously a
+  `HxWx1` array could crash downstream). No method/output change for normal 3-channel input.
+- Full suite: 66 passed.
+
+## 6. Demo smoke test
+- `streamlit run app/app.py --server.headless true`: `/_stcore/health` returns `200 ok`,
+  index returns `200`.
+- App processing path exercised on one SOTS and one RTTS image: score, class
+  (light omega 0.86 / t0 0.35), output shape/range `[0,1]`, entropy gain printed; no errors.
+
+## 7. Repo / docs / tags
+- `git status` clean; only intended files changed (new `tests/test_edge_cases.py` and
+  `MASTER_PROMPT_v3.md`, hardened `src/preprocess.py`, refreshed configs/results/docs).
+- No image data or secrets are tracked (`git ls-files data` -> `README.md`, `splits.json`
+  only). `.gitignore` unchanged.
+- `v0.1-frozen-params` remains on `ead40e6`; `v1.0` retagged on the final v3 commit.
+
+## 8. Optional exports
+- Skipped: the rubric format (PDF/PPTX, page limit) is still unknown (D-00/D-34). The
+  Markdown report and slides are the source of truth and can be exported on request.
+
+## Final report
+1. Clean venv + install + `verify_setup` + tests: PASS.
+2. Data deleted and rebuilt from scratch (fresh SOTS + 72 RTTS): PASS, counts 299/243/72/180/64.
+3. Full `run_all.ps1`: PASS (no errors).
+4. Numbers vs report/slides: PASS (headline + 13 spot-checks; only runtime updated).
+5. Edge cases: PASS, 15 tests added, bug fixed in `preprocess_array`, 66 tests total.
+6. Demo: PASS (health 200; app path OK on SOTS + RTTS).
+7. Repo/docs/tags: PASS (`v1.0` moved, `v0.1-frozen-params` untouched, no data/secrets tracked).
+8. Optional exports: skipped (rubric format unknown; D-00/D-34).
+- Headline (unchanged): adaptive 18.78 dB / 0.8896 vs fixed DCP 15.71 dB / 0.8263.
+- No further changes required unless the rubric asks for a specific report/slide format.

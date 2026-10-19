@@ -8,6 +8,6 @@
 
 - **Real RTTS no-reference set (72 images, no ground truth).** entropy_gain delta +0.3253; contrast_improvement delta +0.1728; edge_preservation delta +0.4767.
 
-- **Runtime.** 273 ms/image (3.7 FPS) on CPU, including preprocessing.
+- **Runtime.** 256 ms/image (3.9 FPS) on CPU, including preprocessing.
 
 - **Ablation.** Full pipeline SSIM 0.8896 vs no-enhancement 0.8726; dark-channel-only density features give SSIM 0.8831 vs full features 0.8896.

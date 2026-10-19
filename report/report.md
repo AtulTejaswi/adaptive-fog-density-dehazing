@@ -181,22 +181,22 @@ selected haze class are shown below; the calibration tertiles give three balance
 <!-- RESULTS_TABLE_START -->
 | split | class | method | psnr | ssim | entropy_gain | contrast_improvement | edge_preservation | total_ms |
 |---|---|---|---|---|---|---|---|---|
-| test_rtts | all | adaptive |  |  | 0.4165 | 1.2376 | 1.6733 | 205.9191 |
-| test_rtts | all | baseline |  |  | 0.0912 | 1.0648 | 1.1967 | 111.0164 |
-| test_rtts | heavy | adaptive |  |  | 0.9994 | 1.5693 | 1.9917 | 162.1244 |
-| test_rtts | heavy | baseline |  |  | 0.7749 | 1.4211 | 1.5967 | 109.2555 |
-| test_rtts | light | adaptive |  |  | 0.0992 | 1.0358 | 1.3885 | 166.5462 |
-| test_rtts | light | baseline |  |  | -0.1971 | 0.8918 | 0.9888 | 111.9271 |
-| test_rtts | moderate | adaptive |  |  | 0.5391 | 1.3865 | 2.1562 | 432.2989 |
-| test_rtts | moderate | baseline |  |  | -0.0773 | 1.0615 | 1.2441 | 110.8238 |
-| test_sots | all | adaptive | 18.7750 | 0.8896 | 0.4258 | 1.3095 | 1.8484 | 273.4861 |
-| test_sots | all | baseline | 15.7100 | 0.8263 | 0.1929 | 1.2406 | 1.3360 | 95.2135 |
-| test_sots | heavy | adaptive | 16.5079 | 0.8672 | 0.6102 | 1.5378 | 1.9581 | 159.2928 |
-| test_sots | heavy | baseline | 15.1354 | 0.8225 | 0.4889 | 1.4919 | 1.5858 | 94.2812 |
-| test_sots | light | adaptive | 19.8208 | 0.9064 | 0.1774 | 1.1255 | 1.5760 | 163.3359 |
-| test_sots | light | baseline | 16.5759 | 0.8399 | -0.0151 | 1.0658 | 1.2070 | 94.6438 |
-| test_sots | moderate | adaptive | 19.4352 | 0.8902 | 0.5232 | 1.3156 | 2.0214 | 457.1767 |
-| test_sots | moderate | baseline | 15.3221 | 0.8165 | 0.1727 | 1.2217 | 1.2759 | 96.4087 |
+| test_rtts | all | adaptive |  |  | 0.4165 | 1.2376 | 1.6733 | 184.2860 |
+| test_rtts | all | baseline |  |  | 0.0912 | 1.0648 | 1.1967 | 93.6030 |
+| test_rtts | heavy | adaptive |  |  | 0.9994 | 1.5693 | 1.9917 | 145.9313 |
+| test_rtts | heavy | baseline |  |  | 0.7749 | 1.4211 | 1.5967 | 91.6385 |
+| test_rtts | light | adaptive |  |  | 0.0992 | 1.0358 | 1.3885 | 148.0721 |
+| test_rtts | light | baseline |  |  | -0.1971 | 0.8918 | 0.9888 | 95.4192 |
+| test_rtts | moderate | adaptive |  |  | 0.5391 | 1.3865 | 2.1562 | 389.0011 |
+| test_rtts | moderate | baseline |  |  | -0.0773 | 1.0615 | 1.2441 | 90.4050 |
+| test_sots | all | adaptive | 18.7750 | 0.8896 | 0.4258 | 1.3095 | 1.8484 | 256.1686 |
+| test_sots | all | baseline | 15.7100 | 0.8263 | 0.1929 | 1.2406 | 1.3360 | 87.1733 |
+| test_sots | heavy | adaptive | 16.5079 | 0.8672 | 0.6102 | 1.5378 | 1.9581 | 148.3146 |
+| test_sots | heavy | baseline | 15.1354 | 0.8225 | 0.4889 | 1.4919 | 1.5858 | 87.3722 |
+| test_sots | light | adaptive | 19.8208 | 0.9064 | 0.1774 | 1.1255 | 1.5760 | 152.1749 |
+| test_sots | light | baseline | 16.5759 | 0.8399 | -0.0151 | 1.0658 | 1.2070 | 88.7939 |
+| test_sots | moderate | adaptive | 19.4352 | 0.8902 | 0.5232 | 1.3156 | 2.0214 | 429.6232 |
+| test_sots | moderate | baseline | 15.3221 | 0.8165 | 0.1727 | 1.2217 | 1.2759 | 85.5335 |
 <!-- RESULTS_TABLE_END -->
 
 ![Before/after by class](../results/figures/before_after_by_class.png)
@@ -214,7 +214,7 @@ selected haze class are shown below; the calibration tertiles give three balance
 
 - **Real RTTS no-reference set (72 images, no ground truth).** entropy_gain delta +0.3253; contrast_improvement delta +0.1728; edge_preservation delta +0.4767.
 
-- **Runtime.** 273 ms/image (3.7 FPS) on CPU, including preprocessing.
+- **Runtime.** 256 ms/image (3.9 FPS) on CPU, including preprocessing.
 
 - **Ablation.** Full pipeline SSIM 0.8896 vs no-enhancement 0.8726; dark-channel-only density features give SSIM 0.8831 vs full features 0.8896.
 <!-- KEY_FINDINGS_END -->
@@ -227,8 +227,8 @@ selected haze class are shown below; the calibration tertiles give three balance
 
 ![Runtime](../results/figures/runtime.png)
 
-On CPU the full adaptive pipeline takes about 273 ms per 640-px image (3.7 FPS),
-compared with about 74 ms for the fixed DCP baseline. The overhead comes from the
+On CPU the full adaptive pipeline takes about 256 ms per 640-px image (3.9 FPS),
+compared with about 69 ms for the fixed DCP baseline. The overhead comes from the
 density features and the enhancement chain (Retinex is the most expensive step). The
 class-specific enhancement settings keep the cost bounded; Retinex is disabled for
 light and heavy classes.
@@ -273,16 +273,16 @@ remains fair. Three visual examples are shown below.
 <!-- ABLATION_TABLE_START -->
 | variant | group | n | psnr | ssim | entropy_gain | contrast_improvement | edge_preservation | color_cast_out | runtime_ms |
 |---|---|---|---|---|---|---|---|---|---|
-| baseline_dcp | baseline | 243 | 15.7100 | 0.8263 | 0.1929 | 1.2406 | 1.3360 | 0.0376 | 74.3596 |
-| adaptive_no_enh | component | 243 | 17.7705 | 0.8726 | 0.2428 | 1.3319 | 1.3835 | 0.0337 | 107.6211 |
-| adaptive_clahe | component | 243 | 18.1839 | 0.8850 | 0.3697 | 1.3173 | 1.7287 | 0.0339 | 124.8363 |
-| adaptive_clahe_retinex | component | 243 | 19.3042 | 0.8840 | 0.5337 | 1.3151 | 2.0560 | 0.0389 | 425.1027 |
-| adaptive_full | component | 243 | 18.7750 | 0.8896 | 0.4258 | 1.3095 | 1.8484 | 0.0187 | 256.7846 |
-| density_dc_only | density_features | 243 | 18.4767 | 0.8831 | 0.4121 | 1.2985 | 1.8218 | 0.0185 | 249.8421 |
-| density_dc_entropy | density_features | 243 | 18.8355 | 0.8901 | 0.4276 | 1.3099 | 1.8496 | 0.0183 | 257.3211 |
-| density_full | density_features | 243 | 18.7750 | 0.8896 | 0.4258 | 1.3095 | 1.8484 | 0.0187 | 253.7904 |
-| selector_continuous | selector | 243 | 18.8002 | 0.8574 | 0.5385 | 1.2317 | 2.1860 | 0.0170 | 440.3025 |
-| selector_classifier | selector | 243 | 18.4006 | 0.8780 | 0.4464 | 1.3053 | 1.8592 | 0.0201 | 318.5575 |
+| baseline_dcp | baseline | 243 | 15.7100 | 0.8263 | 0.1929 | 1.2406 | 1.3360 | 0.0376 | 69.1058 |
+| adaptive_no_enh | component | 243 | 17.7705 | 0.8726 | 0.2428 | 1.3319 | 1.3835 | 0.0337 | 99.8213 |
+| adaptive_clahe | component | 243 | 18.1839 | 0.8850 | 0.3697 | 1.3173 | 1.7287 | 0.0339 | 116.0220 |
+| adaptive_clahe_retinex | component | 243 | 19.3042 | 0.8840 | 0.5337 | 1.3151 | 2.0560 | 0.0389 | 399.6646 |
+| adaptive_full | component | 243 | 18.7750 | 0.8896 | 0.4258 | 1.3095 | 1.8484 | 0.0187 | 235.3790 |
+| density_dc_only | density_features | 243 | 18.4767 | 0.8831 | 0.4121 | 1.2985 | 1.8218 | 0.0185 | 232.4757 |
+| density_dc_entropy | density_features | 243 | 18.8355 | 0.8901 | 0.4276 | 1.3099 | 1.8496 | 0.0183 | 241.1430 |
+| density_full | density_features | 243 | 18.7750 | 0.8896 | 0.4258 | 1.3095 | 1.8484 | 0.0187 | 235.8943 |
+| selector_continuous | selector | 243 | 18.8002 | 0.8574 | 0.5385 | 1.2317 | 2.1860 | 0.0170 | 412.2332 |
+| selector_classifier | selector | 243 | 18.4006 | 0.8780 | 0.4464 | 1.3053 | 1.8592 | 0.0201 | 294.0795 |
 <!-- ABLATION_TABLE_END -->
 
 **Components.** Removing all enhancement lowers SSIM from 0.8896 to 0.8726 and PSNR

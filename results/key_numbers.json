@@ -1,5 +1,5 @@
 {
-  "created": "2026-10-19",
+  "created": "2026-10-20",
   "splits": [
     "test_rtts",
     "test_sots"
@@ -20,22 +20,22 @@
     {
       "split": "test_rtts",
       "n": 72,
-      "density_ms": 25.662427777,
-      "dcp_ms": 61.9128430561,
-      "enhance_ms": 69.5632736129,
-      "total_ms": 205.9190513868,
-      "total_std_ms": 111.8503130556,
-      "fps": 4.8562772277
+      "density_ms": 23.920041667,
+      "dcp_ms": 57.8185930555,
+      "enhance_ms": 65.7792250022,
+      "total_ms": 184.2860319452,
+      "total_std_ms": 98.6401930975,
+      "fps": 5.4263472356
     },
     {
       "split": "test_sots",
       "n": 243,
-      "density_ms": 31.2658086415,
-      "dcp_ms": 74.0649551443,
-      "enhance_ms": 147.6307456789,
-      "total_ms": 273.4861082307,
-      "total_std_ms": 151.4473227964,
-      "fps": 3.6564928525
+      "density_ms": 28.6927423865,
+      "dcp_ms": 67.7161333318,
+      "enhance_ms": 139.8676876545,
+      "total_ms": 256.1685975292,
+      "total_std_ms": 142.6126130467,
+      "fps": 3.903679099
     }
   ],
   "class_counts": {
