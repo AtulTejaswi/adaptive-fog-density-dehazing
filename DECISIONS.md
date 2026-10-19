@@ -1,0 +1,24 @@
+# DECISIONS (settled choices; do not re-debate without a reason. Append new ones.)
+
+| ID | Decision | Why | Status |
+|---|---|---|---|
+| D-00 | Course rubric/deliverables: not supplied; standard deliverables assumed (code + reproducible results + report + slides + demo) | User has not shared rubric; all standard items implemented | CLOSED - assumption |
+| D-01 | Classical methods only (DCP, guided filter, CLAHE, Retinex, gray-world); no deep dehazing nets | Matches proposal; explainable; CPU-friendly | FINAL |
+| D-02 | Baseline = fixed-parameter DCP (omega 0.95, t0 0.1, patch 15, GF r60 eps1e-4), no enhancement | Proposal compares against fixed-param DCP | FINAL |
+| D-03 | Rule-based selector is primary; shallow classifier only as ablation | Proposal says rule-based, classifier optional | FINAL |
+| D-04 | Thresholds/params tuned on `calib` split only; test sets untouched until params frozen & tagged | Avoid test leakage | FINAL |
+| D-05 | Language/stack: Python + OpenCV + scikit-image | Standard, fast to build | FINAL |
+| D-06 | Data subsets rather than full RESIDE | Limited compute/credits | FINAL |
+| D-07 | All tunables in `config/params.yaml` | Ablations become config changes | FINAL |
+| D-08 | Demo UI: Streamlit (fallback Gradio) | Quick to build | FINAL |
+| D-09 | Real SOTS used: 542 unique clear scenes (indoor + outdoor), one hazy variant per scene; split by unique clear scene into 299 calib / 243 test | Avoids scene leakage; real benchmark pairs provide GT | FINAL |
+| D-10 | RTTS real images not redistributed; use `data/RTTS/` if supplied, otherwise a 48-image synthetic RTTS-style no-reference set | Automatic RTTS download was not available; no-reference evaluation must still run | FINAL |
+| D-11 | Density score = 0.45 dark-channel mean + 0.30 (1 - entropy) + 0.25 (1 - contrast), percentile-normalised on calib | Complements three failure modes of DCP; weights fixed before test | FINAL |
+| D-12 | Haze classes are tertiles of the calib score distribution (t1, t2 stored in `config/calibration.json`) | Label-free, balanced calibration bins, no test leakage | FINAL |
+| D-13 | Per-class parameter search constrained to physically ordered omega ranges (light <= 0.86, moderate 0.82-0.94, heavy 0.90-0.97) | Preserves the intended density-adaptive strategy while still tuning on calib | FINAL |
+| D-14 | Tuning objective = 0.50 SSIM + 0.30 min(PSNR/40,1) + 0.20 min(edge ratio/1.25,1) | Balances fidelity and detail retention; logged in `results/tuning_grid.csv` | FINAL |
+| D-15 | Optional classifier = depth-3 decision tree on 3 normalised density features, trained on 180 labelled synthetic hazy images | Provides the classifier ablation without touching test data | FINAL |
+| D-16 | Full-reference metrics PSNR/SSIM on SOTS; no-reference entropy gain, RMS contrast improvement, Sobel edge-preservation ratio, colour cast | Matches proposal; no-reference needed for RTTS-style set | FINAL |
+| D-17 | Test sets are evaluated only after `config/tuned_params.json` is written and tagged `v0.1-frozen-params` | Prevents test leakage | FINAL |
+| D-18 | Beta validation uses 8 calib clear scenes x 8 beta values with fixed depth/A per scene | Directly tests monotonicity of the density score | FINAL |
+| D-19 | Runtime is measured per image on CPU and includes preprocessing; reported mean and FPS | Practical feasibility claim | FINAL |

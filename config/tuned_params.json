@@ -1,0 +1,71 @@
+{
+  "created": "2026-10-19T13:18:09.422594+00:00",
+  "tuned_on": "calib",
+  "objective": {
+    "ssim_weight": 0.5,
+    "psnr_weight": 0.3,
+    "edge_weight": 0.2,
+    "psnr_reference": 40.0
+  },
+  "budget_per_class": 18,
+  "classes": {
+    "light": {
+      "omega": 0.86,
+      "t0": 0.35,
+      "clahe": {
+        "clip_limit": 1.5
+      },
+      "retinex": {
+        "enabled": false,
+        "strength": 0.0
+      },
+      "calibration_metrics": {
+        "psnr": 21.102261794868568,
+        "ssim": 0.8835651963949204,
+        "edge_preservation": 1.329735878928595,
+        "entropy_gain": 0.04549948674080162,
+        "objective": 0.7981727296216445,
+        "n": 20
+      }
+    },
+    "moderate": {
+      "omega": 0.88,
+      "t0": 0.3,
+      "clahe": {
+        "clip_limit": 1.5
+      },
+      "retinex": {
+        "enabled": true,
+        "strength": 0.35
+      },
+      "calibration_metrics": {
+        "psnr": 20.34819777138735,
+        "ssim": 0.9086347639560699,
+        "edge_preservation": 1.7160229890421825,
+        "entropy_gain": 0.47649730856081074,
+        "objective": 0.80692886526344,
+        "n": 20
+      }
+    },
+    "heavy": {
+      "omega": 0.9,
+      "t0": 0.2,
+      "clahe": {
+        "clip_limit": 1.5
+      },
+      "retinex": {
+        "enabled": true,
+        "strength": 0.35
+      },
+      "calibration_metrics": {
+        "psnr": 19.70165575018548,
+        "ssim": 0.8883113205432892,
+        "edge_preservation": 1.8889394765060221,
+        "entropy_gain": 0.6348938330944209,
+        "objective": 0.7919180783980357,
+        "n": 20
+      }
+    }
+  },
+  "note": "Frozen before test evaluation. Only overrides are stored; defaults live in params.yaml."
+}

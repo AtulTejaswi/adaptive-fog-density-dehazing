@@ -1,0 +1,27 @@
+# Data and downloads (never committed)
+data/
+*.zip
+*.tar
+*.tar.gz
+*.z01
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Large / temporary outputs
+results/tmp/
+results/images/
+*.log
+.env
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

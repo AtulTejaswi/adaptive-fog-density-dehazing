@@ -1,0 +1,10 @@
+{
+  "n_train": 180,
+  "classes": [
+    "heavy",
+    "light",
+    "moderate"
+  ],
+  "holdout_accuracy": 0.7555555555555555,
+  "model": "config/selector_classifier.joblib"
+}

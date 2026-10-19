@@ -1,0 +1,42 @@
+{
+  "created": "2026-10-19",
+  "n_calib": 299,
+  "density_stats": {
+    "dark_channel": {
+      "low": 0.327633136510849,
+      "high": 0.6794960689544678
+    },
+    "entropy": {
+      "low": 6.158509607749955,
+      "high": 7.546349626516825
+    },
+    "contrast": {
+      "low": 0.1943031963022268,
+      "high": 0.4815981389455975
+    }
+  },
+  "thresholds": {
+    "t1": 0.39368252630221934,
+    "t2": 0.5885103126961879
+  },
+  "score_stats": {
+    "mean": 0.48957485040819887,
+    "std": 0.19572921349927896,
+    "min": 0.03827067981053714,
+    "max": 1.0,
+    "p25": 0.33788316958022724,
+    "p50": 0.49670662899428775,
+    "p75": 0.6238665094407432
+  },
+  "class_counts": {
+    "moderate": 99,
+    "heavy": 100,
+    "light": 100
+  },
+  "weights": {
+    "dark_channel": 0.45,
+    "entropy": 0.3,
+    "contrast": 0.25
+  },
+  "note": "Fitted on calib only. Never refit on test_sots/test_rtts."
+}
