@@ -14,6 +14,8 @@ python scripts/run_ablations.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 python scripts/make_figures.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+python scripts/audit_baseline.py
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 python scripts/finalize_report.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 python -m pytest -q

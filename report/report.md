@@ -171,7 +171,10 @@ Frozen parameters (all fitted on calib only):
 
 The density score rises with `beta` for every scene. Overall Spearman correlation and
 the stricter within-scene mean are reported in
-`results/density_validation_summary.json`.
+`results/density_validation_summary.json`. The score distributions per split and per
+selected haze class are shown below; the calibration tertiles give three balanced bins.
+
+![Score histograms](../results/figures/score_histograms.png)
 
 ### 5.2 Baseline vs adaptive
 
@@ -197,6 +200,8 @@ the stricter within-scene mean are reported in
 <!-- RESULTS_TABLE_END -->
 
 ![Before/after by class](../results/figures/before_after_by_class.png)
+
+![Metrics by class](../results/figures/metrics_by_class.png)
 
 <!-- KEY_FINDINGS_START -->
 ### Key findings

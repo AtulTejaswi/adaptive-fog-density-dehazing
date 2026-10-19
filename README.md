@@ -39,6 +39,21 @@ J(x) = (I(x) - A) / max(t(x), t0) + A
 
 ## Quick start
 
+Reproduce the headline result in 3 steps:
+
+```bash
+# 1. data (SOTS + 72 real RTTS images)
+python scripts/download_data.py && python scripts/download_rtts.py
+
+# 2. fixed splits (SOTS + RTTS + beta sweep)
+python scripts/prepare_data.py --no-download
+
+# 3. calibrate -> tune -> evaluate -> ablate -> figures -> report -> tests
+./run_all.ps1 --no-download
+```
+
+Or run the stages individually:
+
 ```bash
 pip install -r requirements.txt
 python scripts/download_data.py         # SOTS (RESIDE) download/extract
@@ -52,12 +67,6 @@ python scripts/make_figures.py          # all report figures
 python scripts/audit_baseline.py        # baseline fairness diagnostics
 python scripts/finalize_report.py       # fill report/README numbers from results/
 python -m pytest                        # full test suite (51 tests)
-```
-
-One command (PowerShell):
-
-```powershell
-./run_all.ps1
 ```
 
 Demo:
