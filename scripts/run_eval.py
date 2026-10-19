@@ -210,6 +210,10 @@ def main() -> int:
             for metric in METRICS:
                 a = adap.loc[common, metric].to_numpy(dtype=float)
                 b = base.loc[common, metric].to_numpy(dtype=float)
+                finite = np.isfinite(a) & np.isfinite(b)
+                if not np.any(finite):
+                    continue
+                a, b = a[finite], b[finite]
                 test = paired_test(a, b)
                 comp_rows.append({
                     "split": split, "class": cls, "metric": metric,

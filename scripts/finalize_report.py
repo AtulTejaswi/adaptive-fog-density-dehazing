@@ -90,8 +90,8 @@ def main() -> int:
     findings = []
     findings.append(
         f"**Density validation.** The score is monotone in beta: overall Spearman "
-        f"ρ = {density.get('spearman_overall', float('nan')):.3f}; within-scene mean "
-        f"ρ = {density.get('spearman_within_scene_mean', float('nan')):.3f} "
+        f"rho = {density.get('spearman_overall', float('nan')):.3f}; within-scene mean "
+        f"rho = {density.get('spearman_within_scene_mean', float('nan')):.3f} "
         f"(minimum {density.get('spearman_within_scene_min', float('nan')):.3f} across "
         f"{density.get('n_scenes', 0)} scenes)."
     )
@@ -109,7 +109,7 @@ def main() -> int:
         if c_psnr is None or c_ssim is None:
             continue
         class_bits.append(
-            f"{cls}: ΔPSNR {float(c_psnr['mean_diff']):+.2f} dB, ΔSSIM "
+            f"{cls}: delta PSNR {float(c_psnr['mean_diff']):+.2f} dB, delta SSIM "
             f"{float(c_ssim['mean_diff']):+.4f}, SSIM win rate {_pct(float(c_ssim['win_rate']))}"
         )
     if class_bits:
@@ -120,7 +120,7 @@ def main() -> int:
         for metric in ("entropy_gain", "contrast_improvement", "edge_preservation"):
             row = rtts_comp[rtts_comp.metric == metric]
             if not row.empty:
-                bits.append(f"{metric} Δ {float(row.iloc[0]['mean_diff']):+.4f}")
+                bits.append(f"{metric} delta {float(row.iloc[0]['mean_diff']):+.4f}")
         if bits:
             findings.append("**No-reference RTTS-style set.** " + "; ".join(bits) + ".")
     runtime = pd.read_csv(results / "runtime_summary.csv") if (results / "runtime_summary.csv").exists() else None
@@ -148,7 +148,14 @@ def main() -> int:
     report = report_path.read_text(encoding="utf-8")
     report = _replace_block(report, "RESULTS_TABLE", table_md_report)
     report = _replace_block(report, "KEY_FINDINGS", findings_md)
-    ablation_md = (results / "ablations.md").read_text(encoding="utf-8") if (results / "ablations.md").exists() else "_not available_"
+    if ablations is not None and not ablations.empty:
+        ablation_cols = [c for c in ["variant", "group", "n", "psnr", "ssim", "entropy_gain",
+                                     "contrast_improvement", "edge_preservation",
+                                     "color_cast_out", "runtime_ms"]
+                         if c in ablations.columns]
+        ablation_md = md_table(ablations[ablation_cols])
+    else:
+        ablation_md = "_not available_"
     report = _replace_block(report, "ABLATION_TABLE", ablation_md)
     report_path.write_text(report, encoding="utf-8")
 

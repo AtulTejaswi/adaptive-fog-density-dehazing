@@ -141,11 +141,11 @@ def main() -> int:
         color_cast_out=("color_cast_out", "mean"),
         runtime_ms=("runtime_ms", "mean"),
     ).reset_index())
-    summary.to_csv(results_dir / "ablations.csv", index=False)
 
     order = {v["name"]: i for i, v in enumerate(VARIANTS)}
     summary["_order"] = summary["variant"].map(order)
     summary = summary.sort_values("_order").drop(columns="_order")
+    summary.to_csv(results_dir / "ablations.csv", index=False)
     (results_dir / "ablations.md").write_text(
         "# Ablation study (test split means)\n\n" + _df_to_md(summary) + "\n",
         encoding="utf-8",

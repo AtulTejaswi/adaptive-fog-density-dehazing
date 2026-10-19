@@ -93,7 +93,10 @@ def main() -> None:
         st.stop()
 
     try:
-        if hasattr(source, "read"):
+        if hasattr(source, "getvalue"):
+            img = np.array(Image.open(io.BytesIO(source.getvalue())).convert("RGB")).astype(np.float32) / 255.0
+        elif hasattr(source, "read"):
+            source.seek(0)
             img = np.array(Image.open(source).convert("RGB")).astype(np.float32) / 255.0
         else:
             img = read_rgb(source)

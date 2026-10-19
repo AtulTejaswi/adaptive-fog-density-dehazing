@@ -57,7 +57,7 @@ used as-is in the `test_rtts` split.  If the folder is absent, a synthetic
 RTTS-style set is generated so the no-reference evaluation still runs.
 
 ## What is committed
-Only `data/splits.json` is small enough to keep; `data/` images are gitignored.
+Only `data/splits.json` and this README are kept; `data/` images are gitignored.
 Splits are deterministic for a fixed seed and can always be rebuilt.
 """
 

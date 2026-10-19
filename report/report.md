@@ -15,9 +15,11 @@ density-aware pipeline that estimates a fog-density score from three image stati
 selects a light / moderate / heavy strategy, applies Dark Channel Prior (DCP) dehazing
 with class-specific parameters refined by a guided filter, and then optionally applies
 Retinex illumination correction, CLAHE and gray-world colour correction. We compare
-the adaptive pipeline against a fixed-parameter DCP baseline on 243 SOTS test pairs
-and a no-reference RTTS-style set, report per-class results, run component, feature and
-selector ablations, and analyse failure cases.
+the adaptive pipeline against a fixed-parameter DCP baseline. On 243 held-out SOTS
+pairs the adaptive pipeline improves PSNR from 15.71 dB to 18.78 dB and SSIM from
+0.8263 to 0.8896, with a 96.3% PSNR win rate and improvements in every estimated haze
+class. We also report a no-reference RTTS-style set, component/feature/selector
+ablations, runtime and failure cases.
 
 ---
 
@@ -145,10 +147,19 @@ we report win rate and a Wilcoxon signed-rank test.
 | Adaptive | class-specific params from `config/tuned_params.json` |
 | Runtime | CPU, Python 3.12, OpenCV |
 
-The calibration split is used for the density normalisation, tertile thresholds, the
-classifier and the per-class parameter search. Test sets are evaluated only after
-`config/tuned_params.json` is written and the repository is tagged
-`v0.1-frozen-params`.
+The calibration split is used for the density normalisation, tertile thresholds and
+the per-class parameter search. The classifier ablation is trained on the separate
+180-image synthetic selector set, using the calibration normalisation. Test sets are
+evaluated only after `config/tuned_params.json` is written and the repository is
+tagged `v0.1-frozen-params`.
+
+Frozen parameters (all fitted on calib only):
+
+| class | omega | t0 | CLAHE clip (blend 0.4) | Retinex strength |
+|---|---|---|---|---|
+| light | 0.86 | 0.35 | 1.5 | 0.00 |
+| moderate | 0.94 | 0.30 | 1.5 | 0.35 |
+| heavy | 0.94 | 0.20 | 1.5 | 0.00 |
 
 ---
 
@@ -165,11 +176,42 @@ the stricter within-scene mean are reported in
 ### 5.2 Baseline vs adaptive
 
 <!-- RESULTS_TABLE_START -->
+| split | class | method | psnr | ssim | entropy_gain | contrast_improvement | edge_preservation | total_ms |
+|---|---|---|---|---|---|---|---|---|
+| test_rtts | all | adaptive |  |  | 0.6545 | 1.6954 | 2.6680 | 209.3522 |
+| test_rtts | all | baseline |  |  | 0.3871 | 1.4648 | 1.9342 | 86.6860 |
+| test_rtts | heavy | adaptive |  |  | 1.0604 | 2.0687 | 3.2133 | 145.3660 |
+| test_rtts | heavy | baseline |  |  | 0.8855 | 1.7971 | 2.4858 | 85.4115 |
+| test_rtts | light | adaptive |  |  | 0.2449 | 1.4318 | 2.0172 | 299.3851 |
+| test_rtts | light | baseline |  |  | -0.1887 | 1.1905 | 1.3461 | 89.4814 |
+| test_rtts | moderate | adaptive |  |  | 0.3773 | 1.3273 | 2.3959 | 227.6036 |
+| test_rtts | moderate | baseline |  |  | 0.1195 | 1.1767 | 1.5889 | 86.0474 |
+| test_sots | all | adaptive | 18.7750 | 0.8896 | 0.4258 | 1.3095 | 1.8484 | 258.4771 |
+| test_sots | all | baseline | 15.7100 | 0.8263 | 0.1929 | 1.2406 | 1.3360 | 88.8268 |
+| test_sots | heavy | adaptive | 16.5079 | 0.8672 | 0.6102 | 1.5378 | 1.9581 | 151.5991 |
+| test_sots | heavy | baseline | 15.1354 | 0.8225 | 0.4889 | 1.4919 | 1.5858 | 89.6816 |
+| test_sots | light | adaptive | 19.8208 | 0.9064 | 0.1774 | 1.1255 | 1.5760 | 152.9092 |
+| test_sots | light | baseline | 16.5759 | 0.8399 | -0.0151 | 1.0658 | 1.2070 | 89.2390 |
+| test_sots | moderate | adaptive | 19.4352 | 0.8902 | 0.5232 | 1.3156 | 2.0214 | 432.6862 |
+| test_sots | moderate | baseline | 15.3221 | 0.8165 | 0.1727 | 1.2217 | 1.2759 | 87.8328 |
 <!-- RESULTS_TABLE_END -->
 
 ![Before/after by class](../results/figures/before_after_by_class.png)
 
 <!-- KEY_FINDINGS_START -->
+### Key findings
+
+- **Density validation.** The score is monotone in beta: overall Spearman rho = 0.898; within-scene mean rho = 0.995 (minimum 0.976 across 8 scenes).
+
+- **SOTS overall.** Adaptive PSNR 18.78 dB vs baseline 15.71 dB; SSIM 0.8896 vs 0.8263. Win rate (adaptive > baseline): PSNR 96.3%, SSIM 90.1%.
+
+- **Per class.** light: delta PSNR +3.24 dB, delta SSIM +0.0665, SSIM win rate 90.6%; moderate: delta PSNR +4.11 dB, delta SSIM +0.0737, SSIM win rate 88.0%; heavy: delta PSNR +1.37 dB, delta SSIM +0.0446, SSIM win rate 92.4%.
+
+- **No-reference RTTS-style set.** entropy_gain delta +0.2674; contrast_improvement delta +0.2306; edge_preservation delta +0.7337.
+
+- **Runtime.** 258 ms/image (3.9 FPS) on CPU, including preprocessing.
+
+- **Ablation.** Full pipeline SSIM 0.8896 vs no-enhancement 0.8726; dark-channel-only density features give SSIM 0.8831 vs full features 0.8896.
 <!-- KEY_FINDINGS_END -->
 
 ### 5.3 Transmission maps
@@ -179,6 +221,12 @@ the stricter within-scene mean are reported in
 ### 5.4 Runtime
 
 ![Runtime](../results/figures/runtime.png)
+
+On CPU the full adaptive pipeline takes about 260 ms per 640-px image (3.9 FPS),
+compared with about 90 ms for the fixed DCP baseline. The overhead comes from the
+density features and the enhancement chain (Retinex is the most expensive step). The
+class-specific enhancement settings keep the cost bounded; Retinex is disabled for
+light and heavy classes.
 
 ### 5.5 No-reference real-world-style set
 
@@ -191,7 +239,42 @@ the stricter within-scene mean are reported in
 ![Ablations](../results/figures/ablations.png)
 
 <!-- ABLATION_TABLE_START -->
+| variant | group | n | psnr | ssim | entropy_gain | contrast_improvement | edge_preservation | color_cast_out | runtime_ms |
+|---|---|---|---|---|---|---|---|---|---|
+| baseline_dcp | baseline | 243 | 15.7100 | 0.8263 | 0.1929 | 1.2406 | 1.3360 | 0.0376 | 71.6122 |
+| adaptive_no_enh | component | 243 | 17.7705 | 0.8726 | 0.2428 | 1.3319 | 1.3835 | 0.0337 | 102.5865 |
+| adaptive_clahe | component | 243 | 18.1839 | 0.8850 | 0.3697 | 1.3173 | 1.7287 | 0.0339 | 121.0493 |
+| adaptive_clahe_retinex | component | 243 | 19.3042 | 0.8840 | 0.5337 | 1.3151 | 2.0560 | 0.0389 | 406.5352 |
+| adaptive_full | component | 243 | 18.7750 | 0.8896 | 0.4258 | 1.3095 | 1.8484 | 0.0187 | 243.8007 |
+| density_dc_only | density_features | 243 | 18.4767 | 0.8831 | 0.4121 | 1.2985 | 1.8218 | 0.0185 | 238.6405 |
+| density_dc_entropy | density_features | 243 | 18.8355 | 0.8901 | 0.4276 | 1.3099 | 1.8496 | 0.0183 | 248.3031 |
+| density_full | density_features | 243 | 18.7750 | 0.8896 | 0.4258 | 1.3095 | 1.8484 | 0.0187 | 243.2110 |
+| selector_continuous | selector | 243 | 18.8003 | 0.8574 | 0.5385 | 1.2317 | 2.1860 | 0.0170 | 420.6871 |
+| selector_classifier | selector | 243 | 18.4187 | 0.8779 | 0.4516 | 1.3060 | 1.8639 | 0.0201 | 310.7992 |
 <!-- ABLATION_TABLE_END -->
+
+**Components.** Removing all enhancement lowers SSIM from 0.8896 to 0.8726 and PSNR
+from 18.78 to 17.77 dB, so the enhancement chain is doing real work beyond DCP.
+CLAHE alone reaches 18.18 dB / 0.8850. Adding Retinex to CLAHE raises PSNR to
+19.30 dB but lowers SSIM to 0.8840, showing the expected detail/noise trade-off; the
+full pipeline keeps Retinex only for moderate haze and adds gray-world, which gives
+the best SSIM (0.8896) and the lowest colour cast (0.0187 vs 0.0389 for
+CLAHE+Retinex). This is why the final selector does not simply enable every
+enhancement for every class.
+
+**Density features.** Dark-channel-only density reaches 18.48 dB / 0.8831; adding
+entropy gives 18.84 dB / 0.8901, and adding contrast gives 18.78 dB / 0.8896. Entropy
+therefore carries most of the density signal on SOTS, while contrast is close to
+neutral; we keep all three because they are complementary on the beta sweep and on
+real low-contrast images. The small 0.0005 SSIM difference between the
+entropy-only and full score is within run-to-run and sampling noise, so we do not
+claim a significant advantage for the third feature.
+
+**Selector.** Continuous interpolation reaches 18.80 dB but only 0.8574 SSIM,
+because it over-enhances some images; the depth-3 classifier reaches
+18.42 dB / 0.8779, below the three-bin rule (18.78 dB / 0.8896). The three-bin
+selector is therefore retained as the primary method: it is simpler, interpretable
+and best on SSIM, while continuous/classifier remain useful ablations.
 
 ---
 
