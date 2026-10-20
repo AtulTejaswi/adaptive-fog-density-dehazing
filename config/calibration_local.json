@@ -1,0 +1,33 @@
+{
+  "created": "2026-10-20",
+  "n_calib": 299,
+  "local_stats": {
+    "dark_channel": {
+      "low": 0.1858167052268982,
+      "high": 0.942272424697876
+    },
+    "entropy": {
+      "low": 0.7652541399002075,
+      "high": 6.6070451736450195
+    },
+    "contrast": {
+      "low": 0.00158221204765141,
+      "high": 0.17255811393260956
+    }
+  },
+  "class_score_centroids": {
+    "light": 0.2710134341742926,
+    "moderate": 0.49191174967971596,
+    "heavy": 0.7058473098077361
+  },
+  "score_thresholds": {
+    "t1": 0.3936925955473794,
+    "t2": 0.5885254720761476
+  },
+  "class_counts": {
+    "moderate": 99,
+    "heavy": 100,
+    "light": 100
+  },
+  "note": "Fitted on calib only. Used only when v2.local_density.enabled."
+}

@@ -53,6 +53,24 @@ def deep_update(base: dict, extra: dict) -> dict:
     return base
 
 
+def load_v2_params(params: dict, path: str | Path | None = None,
+                   apply: bool = True) -> dict:
+    """Return a copy of params with the tuned v2 values merged in.
+
+    The tuned file only stores *values* (never feature-enable flags), so the
+    v1 defaults in ``params.yaml`` remain the single source of truth for what
+    is enabled.
+    """
+    merged = copy.deepcopy(params)
+    tuned_path = path or merged.get("paths", {}).get(
+        "tuned_params_v2", "config/tuned_params_v2.json")
+    tuned = load_json(tuned_path, default={}) or {}
+    if apply and isinstance(tuned.get("v2"), dict):
+        merged.setdefault("v2", {})
+        deep_update(merged["v2"], tuned["v2"])
+    return merged
+
+
 def load_json(path: str | Path, default: Any = None) -> Any:
     p = resolve_path(path)
     if not p.exists():

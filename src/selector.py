@@ -33,6 +33,9 @@ class AdaptiveSelector:
         self.tuned = tuned if tuned is not None else (
             load_json(paths.get("tuned_params", "config/tuned_params.json"), default={}) or {}
         )
+        self.local_calibration = (
+            load_json(paths.get("calibration_local", "config/calibration_local.json"), default={}) or {}
+        )
         sel = params.get("selector", {})
         thresholds = self.calibration.get("thresholds") or sel.get("thresholds", {})
         self.t1 = float(thresholds.get("t1", 0.33))
@@ -82,6 +85,49 @@ class AdaptiveSelector:
         cfg["retinex"]["enabled"] = bool(strength > 0.02)
         cfg["continuous"] = True
         return cfg
+
+    # -- v2: spatially varying parameters -----------------------------------
+    def class_anchors(self) -> list[float]:
+        """Score anchors for the three classes (calib centroids when available)."""
+        centroids = self.local_calibration.get("class_score_centroids") or {}
+        anchors = [float(centroids[c]) for c in CLASSES if c in centroids]
+        if len(anchors) == 3:
+            return anchors
+        return [0.5 * self.t1, 0.5 * (self.t1 + self.t2),
+                min(1.0, self.t2 + 0.5 * (1.0 - self.t2))]
+
+    def parameter_maps(self, score_map: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Interpolate omega(x) and t0(x) from the per-class values.
+
+        Anchors are the calibration class centroids, so the map follows the
+        same score scale as the three-bin selector.  omega is non-decreasing
+        and t0 is non-increasing in density.
+        """
+        values = []
+        for label in CLASSES:
+            cfg = self.params_for_class(label)
+            values.append((float(cfg.get("omega", 0.85)), float(cfg.get("t0", 0.20))))
+        xs = np.asarray(self.class_anchors(), dtype=np.float64)
+        order = np.argsort(xs)
+        xs = xs[order]
+        # strictly increasing anchors for np.interp
+        for i in range(1, len(xs)):
+            if xs[i] <= xs[i - 1] + 1e-6:
+                xs[i] = xs[i - 1] + 1e-3
+        omegas = np.asarray([values[i][0] for i in order], dtype=np.float64)
+        t0s = np.asarray([values[i][1] for i in order], dtype=np.float64)
+        omegas = np.maximum.accumulate(omegas)
+        t0s = np.minimum.accumulate(t0s)
+
+        dehaze = self.params.get("dehaze", {})
+        local = self.params.get("v2", {}).get("local_density", {})
+        omega_bounds = local.get("omega_bounds", [float(omegas.min()), float(dehaze.get("max_omega", 0.97))])
+        t0_bounds = local.get("t0_bounds", [float(dehaze.get("min_t0", 0.05)), float(t0s.max())])
+        omega_map = np.interp(score_map, xs, omegas)
+        t0_map = np.interp(score_map, xs, t0s)
+        omega_map = np.clip(omega_map, float(omega_bounds[0]), float(omega_bounds[1]))
+        t0_map = np.clip(t0_map, float(t0_bounds[0]), float(t0_bounds[1]))
+        return omega_map.astype(np.float32), t0_map.astype(np.float32)
 
     def select(self, score: float, normalised: dict | None = None) -> dict:
         label = self.classify(score, normalised)

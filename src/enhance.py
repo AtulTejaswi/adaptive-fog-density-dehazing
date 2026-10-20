@@ -13,6 +13,7 @@ import numpy as np
 
 from .io_utils import to_uint8
 from .density import grayscale
+from .guided_filter import guided_filter
 
 
 def _percentile_stretch(x: np.ndarray, low: float = 1.0, high: float = 99.0) -> np.ndarray:
@@ -67,6 +68,30 @@ def apply_retinex(img: np.ndarray, strength: float = 0.5, method: str = "msr",
     return np.clip((1.0 - strength) * img + strength * lit, 0.0, 1.0).astype(np.float32)
 
 
+def apply_retinex_fast(img: np.ndarray, strength: float = 0.5,
+                       scale: float = 0.5) -> np.ndarray:
+    """Cheap Retinex approximation: guided-filter illumination on a downscaled copy.
+
+    The illumination gain is estimated at ``scale`` resolution and bilinearly
+    upsampled.  It is opt-in (`v2.retinex.fast: true`) so the v1 path is
+    unchanged.
+    """
+    strength = float(np.clip(strength, 0.0, 1.0))
+    if strength <= 0.0:
+        return img
+    h, w = img.shape[:2]
+    scale = float(np.clip(scale, 0.2, 1.0))
+    sw, sh = max(8, int(round(w * scale))), max(8, int(round(h * scale)))
+    small = cv2.resize(img, (sw, sh), interpolation=cv2.INTER_AREA)
+    lum = np.clip(grayscale(small), 1e-3, 1.0)
+    radius = max(4, int(0.03 * max(sw, sh)))
+    illumination = guided_filter(lum, lum, radius=radius, eps=1e-2)
+    gain = np.clip(lum / (illumination + 1e-6), 0.5, 2.0).astype(np.float32)
+    gain_full = cv2.resize(gain, (w, h), interpolation=cv2.INTER_LINEAR)
+    lit = np.clip(img * gain_full[..., None], 0.0, 1.0)
+    return np.clip((1.0 - strength) * img + strength * lit, 0.0, 1.0).astype(np.float32)
+
+
 def apply_gray_world(img: np.ndarray, strength: float = 0.6,
                      max_gain: float = 1.25) -> np.ndarray:
     """Reduce residual colour cast by equalising channel means."""
@@ -86,6 +111,8 @@ def apply_enhancements(
     defaults: dict,
     order: list[str],
     switches: dict[str, bool] | None = None,
+    retinex_fast: bool = False,
+    retinex_scale: float = 0.5,
 ) -> tuple[np.ndarray, dict]:
     """Apply the configured enhancement chain.
 
@@ -108,12 +135,16 @@ def apply_enhancements(
         if not step_cfg.get("enabled", False):
             continue
         if step == "retinex":
-            out = apply_retinex(
-                out,
-                strength=step_cfg.get("strength", 0.5),
-                method=step_cfg.get("method", "msr"),
-                sigmas=step_cfg.get("sigmas", [15, 80, 250]),
-            )
+            if retinex_fast:
+                out = apply_retinex_fast(out, strength=step_cfg.get("strength", 0.5),
+                                         scale=retinex_scale)
+            else:
+                out = apply_retinex(
+                    out,
+                    strength=step_cfg.get("strength", 0.5),
+                    method=step_cfg.get("method", "msr"),
+                    sigmas=step_cfg.get("sigmas", [15, 80, 250]),
+                )
         elif step == "clahe":
             out = apply_clahe(
                 out,

@@ -1,11 +1,13 @@
 """Stage 5: full-reference and no-reference quality metrics."""
 from __future__ import annotations
 
+import cv2
 import numpy as np
 from scipy import stats
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 
-from .density import grayscale, michelson_contrast, rms_contrast, shannon_entropy
+from .density import dark_channel, grayscale, michelson_contrast, rms_contrast, shannon_entropy
+from .io_utils import to_uint8
 
 
 def psnr(reference: np.ndarray, image: np.ndarray, data_range: float = 1.0) -> float:
@@ -55,6 +57,102 @@ def color_cast(img: np.ndarray) -> float:
     return float(np.std(means))
 
 
+def ciede2000(reference: np.ndarray, image: np.ndarray) -> float:
+    """Mean CIEDE2000 colour difference in Lab (lower is better)."""
+    from skimage.color import deltaE_ciede2000, rgb2lab
+
+    reference, image = _match(reference, image)
+    delta = deltaE_ciede2000(rgb2lab(reference), rgb2lab(image))
+    return float(np.mean(delta))
+
+
+def _mscn(gray: np.ndarray) -> np.ndarray:
+    sigma = 7.0 / 6.0
+    mu = cv2.GaussianBlur(gray.astype(np.float32), (7, 7), sigma)
+    var = cv2.GaussianBlur(gray.astype(np.float32) ** 2, (7, 7), sigma) - mu * mu
+    return ((gray - mu) / (np.sqrt(np.maximum(var, 0.0)) + 1e-6)).astype(np.float32)
+
+
+def niqe_features(img: np.ndarray) -> np.ndarray:
+    """MSCN statistics at two scales (NIQE-style, 20 features)."""
+    gray = grayscale(img).astype(np.float32)
+    feats: list[float] = []
+    for scale in range(2):
+        m = _mscn(gray)
+        h, w = m.shape
+        maps = [
+            m,
+            m[:, :-1] * m[:, 1:],
+            m[:-1, :] * m[1:, :],
+            m[:-1, :-1] * m[1:, 1:],
+            m[:-1, 1:] * m[1:, :-1],
+        ]
+        for values in maps:
+            feats.extend([float(np.mean(values)), float(np.std(values))])
+        if scale == 0:
+            gray = cv2.resize(gray, (max(8, w // 2), max(8, h // 2)),
+                              interpolation=cv2.INTER_AREA)
+    return np.asarray(feats, dtype=np.float64)
+
+
+def fit_niqe_model(images: list[np.ndarray], reg: float = 1e-3) -> dict:
+    """Fit the pristine multivariate-Gaussian model on clean calib images."""
+    if not images:
+        raise ValueError("NIQE model needs at least one pristine image")
+    features = np.vstack([niqe_features(img) for img in images])
+    mean = features.mean(axis=0)
+    n_features = features.shape[1]
+    if features.shape[0] < 2:
+        cov = np.diag(np.ones(n_features, dtype=np.float64))
+    else:
+        cov = np.atleast_2d(np.cov(features, rowvar=False))
+        if cov.shape != (n_features, n_features) or not np.all(np.isfinite(cov)):
+            cov = np.diag(np.var(features, axis=0) + 1e-6)
+    scale = float(np.trace(cov)) / max(1, cov.shape[0])
+    cov = cov + float(reg) * max(scale, 1e-9) * np.eye(cov.shape[0])
+    return {
+        "mean": mean.tolist(),
+        "cov_inv": np.linalg.pinv(cov).tolist(),
+        "n_images": int(features.shape[0]),
+        "n_features": int(features.shape[1]),
+    }
+
+
+def niqe(img: np.ndarray, model: dict | None) -> float:
+    """NIQE-style distance to the pristine model (lower is better)."""
+    if not model or "mean" not in model or "cov_inv" not in model:
+        return float("nan")
+    mean = np.asarray(model["mean"], dtype=np.float64)
+    cov_inv = np.asarray(model["cov_inv"], dtype=np.float64)
+    diff = niqe_features(img) - mean
+    value = float(diff @ cov_inv @ diff)
+    return float(np.sqrt(max(value, 0.0)))
+
+
+def fade_fog_density(img: np.ndarray, cfg: dict | None = None) -> float:
+    """FADE-style perceptual fog density in [0, 1] (lower = clearer).
+
+    Uses the Choi et al. (2015) feature set (dark channel, contrast,
+    saturation, colourfulness, entropy) with fixed documented weights.  The
+    official learned FADE model is not shipped, so this is a transparent
+    stand-in and is labelled as such in the report.
+    """
+    weights = ((cfg or {}).get("fade", {}) or {}).get("weights", {})
+    dark = np.clip(float(np.mean(dark_channel(img, 15))) / 0.75, 0.0, 1.0)
+    contrast = np.clip(rms_contrast(img) / 0.35, 0.0, 1.0)
+    saturation = float(np.mean(cv2.cvtColor(to_uint8(img), cv2.COLOR_RGB2HSV)[..., 1])) / 255.0
+    colourful = np.clip(colorfulness(img) / 0.60, 0.0, 1.0)
+    entropy = np.clip(shannon_entropy(img) / 8.0, 0.0, 1.0)
+    value = (
+        float(weights.get("dark_channel", 0.35)) * dark
+        + float(weights.get("contrast", 0.25)) * (1.0 - contrast)
+        + float(weights.get("saturation", 0.15)) * (1.0 - saturation)
+        + float(weights.get("colorfulness", 0.15)) * (1.0 - colourful)
+        + float(weights.get("entropy", 0.10)) * (1.0 - entropy)
+    )
+    return float(np.clip(value, 0.0, 1.0))
+
+
 def no_reference_metrics(hazy: np.ndarray, out: np.ndarray,
                          edge_operator: str = "sobel") -> dict[str, float]:
     h_entropy, o_entropy = shannon_entropy(hazy), shannon_entropy(out)
@@ -94,6 +192,33 @@ def evaluate_pair(clear: np.ndarray, hazy: np.ndarray, out: np.ndarray,
     metrics["ssim_hazy"] = ssim(clear, hazy, data_range)
     metrics["psnr_gain"] = metrics["psnr"] - metrics["psnr_hazy"]
     metrics["ssim_gain"] = metrics["ssim"] - metrics["ssim_hazy"]
+    return metrics
+
+
+def no_reference_metrics_v2(hazy: np.ndarray, out: np.ndarray,
+                            niqe_model: dict | None = None,
+                            cfg: dict | None = None,
+                            edge_operator: str = "sobel") -> dict[str, float]:
+    """v1 no-reference metrics plus NIQE-style and FADE-style fog density."""
+    metrics = no_reference_metrics(hazy, out, edge_operator)
+    metrics["niqe_out"] = niqe(out, niqe_model)
+    metrics["niqe_in"] = niqe(hazy, niqe_model)
+    metrics["fade_in"] = fade_fog_density(hazy, cfg)
+    metrics["fade_out"] = fade_fog_density(out, cfg)
+    metrics["fade_reduction"] = metrics["fade_in"] - metrics["fade_out"]
+    return metrics
+
+
+def evaluate_pair_v2(clear: np.ndarray, hazy: np.ndarray, out: np.ndarray,
+                     niqe_model: dict | None = None, cfg: dict | None = None,
+                     data_range: float = 1.0, edge_operator: str = "sobel") -> dict[str, float]:
+    """Full-reference v2 metrics: v1 + CIEDE2000 + NIQE-style + FADE-style."""
+    metrics = evaluate_pair(clear, hazy, out, data_range, edge_operator)
+    metrics["ciede2000"] = ciede2000(clear, out)
+    metrics.update({
+        k: v for k, v in no_reference_metrics_v2(hazy, out, niqe_model, cfg, edge_operator).items()
+        if k in {"niqe_out", "niqe_in", "fade_in", "fade_out", "fade_reduction"}
+    })
     return metrics
 
 

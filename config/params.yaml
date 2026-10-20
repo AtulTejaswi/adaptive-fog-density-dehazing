@@ -10,7 +10,10 @@ project:
 
 paths:
   calibration: config/calibration.json
+  calibration_local: config/calibration_local.json
   tuned_params: config/tuned_params.json
+  tuned_params_v2: config/tuned_params_v2.json
+  niqe_model: config/niqe_model.json
   selector_classifier: config/selector_classifier.joblib
   splits: data/splits.json
 
@@ -114,9 +117,68 @@ enhance:
     strength: 0.6
     max_gain: 1.25
 
+# ---------------------------------------------------------------------------
+# v2 upgrade (opt-in).  Every flag defaults to off: with all of them off the
+# adaptive pipeline reproduces v1.0 exactly (tests/test_v2_compat.py).
+# ---------------------------------------------------------------------------
+v2:
+  enabled: false                # master switch for the v2 path
+  airlight:
+    method: v1                  # v1 | v2 | quadtree
+    candidate_percent: 0.5
+    min_component_fraction: 0.0005
+    gradient_percentile: 60
+    quadtree:
+      min_size: 32
+      max_depth: 6
+  sky:
+    enabled: false
+    brightness_threshold: 0.80
+    gradient_threshold: 0.04
+    min_area_fraction: 0.02
+    morph_kernel: 5
+    t_floor: 0.35
+    blend: 0.35
+  local_density:
+    enabled: false
+    window: 31
+    smooth_radius: 15
+    smooth_eps: 0.001
+    omega_bounds: [0.70, 0.97]
+    t0_bounds: [0.05, 0.40]
+    map_blend: 1.0              # 0 = scalar v1 params, 1 = full local map
+  enhance:
+    local_blend: false
+    floor: 0.30                 # minimum enhancement blend in clear regions
+  retinex:
+    fast: false                 # guided-filter illumination on a downsampled copy
+    scale: 0.5
+
+baselines:
+  cap:
+    beta: 1.0                   # published CAP theta coefficients; fixed beta
+    t0: 0.10
+    patch_size: 15
+  bccr:
+    omega: 0.95
+    t0: 0.10
+    patch_size: 15
+    guided_filter: {radius: 60, eps: 0.0001}
+
 metrics:
   ssim_data_range: 1.0
   edge_operator: sobel
+  niqe:
+    reg: 1.0e-3
+  fade:
+    # Fixed weights over the Choi (2015) FADE feature set.  Documented as a
+    # simplified FADE-style index (the official learned model is not shipped).
+    weights:
+      dark_channel: 0.35
+      contrast: 0.25
+      saturation: 0.15
+      colorfulness: 0.15
+      entropy: 0.10
 
 evaluation:
   splits_file: data/splits.json
