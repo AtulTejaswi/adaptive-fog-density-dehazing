@@ -1,0 +1,136 @@
+{
+  "created": "2026-10-20",
+  "n_images": {
+    "test_rtts": 72,
+    "test_sots": 243
+  },
+  "methods": [
+    "dcp",
+    "cap",
+    "bccr",
+    "v1",
+    "v2"
+  ],
+  "test_sots": {
+    "dcp": {
+      "psnr": 15.709960050256809,
+      "ssim": 0.8263075506245648,
+      "ciede2000": 12.638723567680076,
+      "niqe_out": 1.3105931109955546,
+      "fade_out": 0.373467657586685,
+      "runtime_ms": 59.377229627947145
+    },
+    "cap": {
+      "psnr": 18.091184172672325,
+      "ssim": 0.7833121743957692,
+      "ciede2000": 9.835393937036335,
+      "niqe_out": 2.031327474152441,
+      "fade_out": 0.3911446978344636,
+      "runtime_ms": 38.177243209326136
+    },
+    "bccr": {
+      "psnr": 16.018632581075327,
+      "ssim": 0.8309483353983719,
+      "ciede2000": 12.35532070285499,
+      "niqe_out": 1.266538513612854,
+      "fade_out": 0.37530829719261366,
+      "runtime_ms": 83.05970864196082
+    },
+    "v1": {
+      "psnr": 18.775014798999063,
+      "ssim": 0.8896009571267744,
+      "ciede2000": 9.501434608742043,
+      "niqe_out": 1.6849558043995363,
+      "fade_out": 0.4050937106893745,
+      "runtime_ms": 192.31521028861474
+    },
+    "v2": {
+      "psnr": 18.450325766280383,
+      "ssim": 0.8872773372587354,
+      "ciede2000": 9.38137495076215,
+      "niqe_out": 1.794341358427378,
+      "fade_out": 0.4007226926503206,
+      "runtime_ms": 561.717705349481
+    }
+  },
+  "test_rtts": {
+    "dcp": {
+      "entropy_gain": 0.09119908412601248,
+      "contrast_improvement": 1.0647615288859984,
+      "edge_preservation": 1.1966696834697064,
+      "niqe_out": 1.376588174975729,
+      "fade_out": 0.44510943065072733,
+      "runtime_ms": 53.2228597225589
+    },
+    "cap": {
+      "entropy_gain": -0.056443481882898196,
+      "contrast_improvement": 1.1774546170057039,
+      "edge_preservation": 1.0864008725071983,
+      "niqe_out": 1.8407012642792269,
+      "fade_out": 0.46951170033151907,
+      "runtime_ms": 36.987333331732465
+    },
+    "bccr": {
+      "entropy_gain": 0.11130031760299408,
+      "contrast_improvement": 1.0772322973739665,
+      "edge_preservation": 1.2024536374275212,
+      "niqe_out": 1.2475904603286354,
+      "fade_out": 0.4447923959641561,
+      "runtime_ms": 76.85970833174198
+    },
+    "v1": {
+      "entropy_gain": 0.416479236634167,
+      "contrast_improvement": 1.2375810338089792,
+      "edge_preservation": 1.673346240309899,
+      "niqe_out": 1.4982260755406256,
+      "fade_out": 0.4677387965446596,
+      "runtime_ms": 131.54639722415595
+    },
+    "v2": {
+      "entropy_gain": 0.3063347045364535,
+      "contrast_improvement": 1.219586324205923,
+      "edge_preservation": 1.47292645818006,
+      "niqe_out": 1.7759696323636587,
+      "fade_out": 0.4585749411703208,
+      "runtime_ms": 479.046319441194
+    }
+  },
+  "brightness_diagnostic": [
+    {
+      "method": "bccr",
+      "n": 243,
+      "psnr": 16.0186325811,
+      "psnr_matched": 21.4585932702,
+      "gain_from_match": 5.4399606891
+    },
+    {
+      "method": "cap",
+      "n": 243,
+      "psnr": 18.0911841727,
+      "psnr_matched": 24.8474041534,
+      "gain_from_match": 6.7562199807
+    },
+    {
+      "method": "dcp",
+      "n": 243,
+      "psnr": 15.7099600503,
+      "psnr_matched": 21.2465815195,
+      "gain_from_match": 5.5366214693
+    },
+    {
+      "method": "v1",
+      "n": 243,
+      "psnr": 18.775014799,
+      "psnr_matched": 21.8846991758,
+      "gain_from_match": 3.1096843768
+    },
+    {
+      "method": "v2",
+      "n": 243,
+      "psnr": 18.4503257663,
+      "psnr_matched": 22.2552334738,
+      "gain_from_match": 3.8049077075
+    }
+  ],
+  "note": "v2 params frozen at tag v2.0-frozen-params before this run."
+}

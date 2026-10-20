@@ -1,25 +1,30 @@
-# Adaptive, Fog-Density-Aware Single-Image Dehazing
+# FogSense: An Intelligent Multi-Algorithm Framework for Adaptive Haze Removal
 
-**IPA course project — report draft**
+**IPA course project — final report**
 
 > Every numeric value in this report is generated from files under `results/`.
-> Regenerate with `./run_all.ps1` (or the individual scripts listed in the README).
+> Regenerate v1 with `./run_all.ps1` (or the individual scripts listed in the README);
+> regenerate v2 with `./run_all_v2.ps1`.
 
 ---
 
 ## Abstract
 
 Haze scattering reduces contrast and colour fidelity, and a fixed-parameter dehazer
-applies the same correction to light and dense fog. We present a classical,
-density-aware pipeline that estimates a fog-density score from three image statistics,
-selects a light / moderate / heavy strategy, applies Dark Channel Prior (DCP) dehazing
-with class-specific parameters refined by a guided filter, and then optionally applies
-Retinex illumination correction, CLAHE and gray-world colour correction. We compare
+applies the same correction to light and dense fog. We present **FogSense**, a classical,
+density-aware, multi-algorithm framework that estimates a fog-density score from three
+image statistics, selects a light / moderate / heavy strategy, applies Dark Channel Prior
+(DCP) dehazing with class-specific parameters refined by a guided filter, and then
+optionally applies Retinex illumination correction, CLAHE and gray-world colour
+correction. We compare
 the adaptive pipeline against a fixed-parameter DCP baseline. On 243 held-out SOTS
 pairs the adaptive pipeline improves PSNR from 15.71 dB to 18.78 dB and SSIM from
 0.8263 to 0.8896, with a 96.3% PSNR win rate and improvements in every estimated haze
 class. We also report a no-reference real-world RTTS set, component/feature/selector
-ablations, runtime and failure cases.
+ablations, runtime and failure cases. An opt-in v2 extension (v2 airlight/sky, local
+density maps, stronger CAP/BCCR baselines) is evaluated separately in §9: it improves
+indoor SOTS and CIEDE2000 but does **not** beat v1 on aggregate SOTS PSNR/SSIM, and the
+stronger CAP baseline narrows the adaptive PSNR advantage.
 
 ---
 
@@ -40,6 +45,12 @@ image. On light haze this over-corrects (dark, unnatural results, lost colour); 
 haze it under-corrects. The project hypothesis is that **estimating fog density first
 and adapting the correction strength and enhancement strategy** yields more consistent
 results across haze levels.
+
+We call the resulting framework **FogSense**. It is *multi-algorithm* because the same
+density-aware interface can dispatch the adaptive DCP pipeline and the fixed DCP, CAP and
+BCCR-style baselines, and *intelligent* in the sense of density-aware rule-based
+adaptation, not a trained deep network. The v2 extension adds an optional atmospheric-
+light/sky stage and local density maps; §9 evaluates it honestly against v1.
 
 Contributions:
 
@@ -340,6 +351,163 @@ the committed scripts and CSVs.
 
 ---
 
+<!-- V2_SECTION_START -->
+## 9. v2 upgrade (opt-in)
+
+v1.0 remains the default. This section describes a separate, opt-in v2 pipeline. With every v2 flag off the output is byte-identical to v1.0 (`tests/test_v2_compat.py`). All v2 knobs were fitted on the **calib** split only and frozen at tag `v2.0-frozen-params` before the first v2 test-split run; the v1 tables above are unchanged.
+
+### 9.1 Atmospheric light and sky handling
+
+v2 atmospheric light takes the brightest 0.5% of dark-channel pixels, rejects small connected components (< 0.05% of pixels) and high-gradient pixels (> 60th percentile of Sobel magnitude), then averages the survivors; if too few survive it falls back to v1. A quad-tree sky search (score = mean - std, recurse on the best quadrant) is implemented as an alternative. A conservative sky mask (bright >= 0.80, smooth gradient <= 0.04, connected area >= 2% of the image) floors transmission at 0.25 and blends the output 25% toward the input inside the mask.
+
+Calib comparison (36 images, 29 containing sky):
+
+| method | n | psnr | ssim | objective |
+|---|---|---|---|---|
+| v1 | 36 | 19.2573 | 0.8607 | 0.6858 |
+| v2 | 36 | 19.3708 | 0.8596 | 0.6859 |
+| quadtree | 36 | 18.3785 | 0.8405 | 0.6665 |
+
+On calib the v2 airlight changes PSNR by +0.11 dB and SSIM by -0.0011 relative to v1 (objective essentially tied); the quad-tree search is -0.88 dB worse, so it is not used. The v2 gain is therefore not an average-case PSNR gain; it is a failure-case/sky intervention, which is why it is kept opt-in.
+
+### 9.2 Local density and per-pixel parameters
+
+A sliding-window density map is built from local dark-channel mean, rank entropy (disk radius 15) and local RMS contrast, normalised with calib-only statistics (`config/calibration_local.json`). The map is guided-filter smoothed (radius 15, eps 1e-3). `omega(x)` and `t0(x)` are interpolated from the three per-class values at the calibration class centroids; omega is forced non-decreasing and t0 non-increasing in density, with bounds omega in [0.70, 0.97], t0 in [0.05, 0.40]. Enhancement is blended spatially as `out = (1-alpha) * dehazed + alpha * enhanced`, `alpha = floor + (1-floor) * score_map`; calib selected `floor = 0.0`, i.e. enhancement proportional to local density.
+
+![v2 density maps](../results/figures/v2_density_maps.png)
+
+### 9.3 Stronger baselines and metrics
+
+* **CAP** (Zhu et al., 2015): published theta coefficients, fixed `beta = 1.0`, `t0 = 0.10`; atmospheric light from the brightest 0.1% of the depth map.
+* **BCCR-style** (Meng et al., 2013): the dark-channel transmission is projected onto the physical boundary constraint `0 <= J <= 1` and refined with the guided filter. This is a simplified BCCR, not the full L1 contextual solver.
+* **CIEDE2000**: mean colour difference in Lab (lower is better).
+* **NIQE-style**: 20 MSCN statistics at two scales, multivariate Gaussian fitted on the 299 **calib clear** images (lower is better). The official NIQE model is not shipped.
+* **FADE-style**: the Choi et al. (2015) feature set (dark channel, contrast, saturation, colourfulness, entropy) with fixed documented weights (lower = clearer). The official learned FADE model is not shipped. Both no-reference indices are therefore *style* proxies and should be read as relative trends, not absolute scores.
+
+### 9.4 Test results
+
+**SOTS test (243 pairs), identical preprocessing for every method:**
+
+| method | n | psnr | ssim | ciede2000 | niqe_out | fade_out | entropy_gain | contrast_improvement | edge_preservation | color_cast_out | runtime_ms |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| bccr | 243 | 16.0186 | 0.8309 | 12.3553 | 1.2665 | 0.3753 | 0.2013 | 1.2669 | 1.3483 | 0.0362 | 83.0597 |
+| cap | 243 | 18.0912 | 0.7833 | 9.8354 | 2.0313 | 0.3911 | 0.1184 | 1.3909 | 1.2552 | 0.0311 | 38.1772 |
+| dcp | 243 | 15.7100 | 0.8263 | 12.6387 | 1.3106 | 0.3735 | 0.1929 | 1.2406 | 1.3360 | 0.0376 | 59.3772 |
+| v1 | 243 | 18.7750 | 0.8896 | 9.5014 | 1.6850 | 0.4051 | 0.4258 | 1.3095 | 1.8484 | 0.0187 | 192.3152 |
+| v2 | 243 | 18.4503 | 0.8873 | 9.3814 | 1.7943 | 0.4007 | 0.3202 | 1.3307 | 1.5837 | 0.0244 | 561.7177 |
+
+**Real RTTS (72 images, no ground truth):**
+
+| method | n | niqe_out | fade_out | entropy_gain | contrast_improvement | edge_preservation | color_cast_out | runtime_ms |
+|---|---|---|---|---|---|---|---|---|
+| bccr | 72 | 1.2476 | 0.4448 | 0.1113 | 1.0772 | 1.2025 | 0.0259 | 76.8597 |
+| cap | 72 | 1.8407 | 0.4695 | -0.0564 | 1.1775 | 1.0864 | 0.0225 | 36.9873 |
+| dcp | 72 | 1.3766 | 0.4451 | 0.0912 | 1.0648 | 1.1967 | 0.0263 | 53.2229 |
+| v1 | 72 | 1.4982 | 0.4677 | 0.4165 | 1.2376 | 1.6733 | 0.0129 | 131.5464 |
+| v2 | 72 | 1.7760 | 0.4586 | 0.3063 | 1.2196 | 1.4729 | 0.0174 | 479.0463 |
+
+**SOTS indoor / outdoor split:**
+
+| group | method | n | psnr | ssim | ciede2000 | niqe_out | fade_out |
+|---|---|---|---|---|---|---|---|
+| indoor | bccr | 22 | 19.5613 | 0.8466 | 7.7902 | 1.3738 | 0.3555 |
+| indoor | cap | 22 | 19.0741 | 0.7827 | 7.8376 | 1.8844 | 0.3776 |
+| indoor | dcp | 22 | 19.1234 | 0.8390 | 8.1118 | 1.3446 | 0.3551 |
+| indoor | v1 | 22 | 19.8113 | 0.8410 | 9.1011 | 2.3140 | 0.3895 |
+| indoor | v2 | 22 | 20.5578 | 0.8528 | 7.4699 | 2.6761 | 0.3805 |
+| outdoor | bccr | 221 | 15.6660 | 0.8294 | 12.8098 | 1.2559 | 0.3773 |
+| outdoor | cap | 221 | 17.9933 | 0.7834 | 10.0343 | 2.0460 | 0.3925 |
+| outdoor | dcp | 221 | 15.3702 | 0.8250 | 13.0894 | 1.3072 | 0.3753 |
+| outdoor | v1 | 221 | 18.6719 | 0.8944 | 9.5413 | 1.6223 | 0.4066 |
+| outdoor | v2 | 221 | 18.2405 | 0.8907 | 9.5717 | 1.7066 | 0.4027 |
+
+**Paired comparison, v2 vs each method (SOTS):**
+
+| metric | v2_vs | n | mean_diff (v2-other) | win rate (better) | p (Wilcoxon) |
+|---|---|---|---|---|---|
+| psnr | dcp | 243 | 2.7404 | 0.9753 | <0.0001 |
+| psnr | cap | 243 | 0.3591 | 0.5432 | 0.0926 |
+| psnr | bccr | 243 | 2.4317 | 0.9259 | <0.0001 |
+| psnr | v1 | 243 | -0.3247 | 0.3827 | 0.0002 |
+| ssim | dcp | 243 | 0.0610 | 0.9506 | <0.0001 |
+| ssim | cap | 243 | 0.1040 | 0.7695 | <0.0001 |
+| ssim | bccr | 243 | 0.0563 | 0.9259 | <0.0001 |
+| ssim | v1 | 243 | -0.0023 | 0.4938 | 0.4416 |
+| ciede2000 | dcp | 243 | -3.2573 | 0.9342 | <0.0001 |
+| ciede2000 | cap | 243 | -0.4540 | 0.5679 | 0.0134 |
+| ciede2000 | bccr | 243 | -2.9739 | 0.8930 | <0.0001 |
+| ciede2000 | v1 | 243 | -0.1201 | 0.5514 | 0.2341 |
+| niqe_out | dcp | 243 | 0.4837 | 0.5185 | 0.0013 |
+| niqe_out | cap | 243 | -0.2370 | 0.5514 | 0.0218 |
+| niqe_out | bccr | 243 | 0.5278 | 0.4691 | <0.0001 |
+| niqe_out | v1 | 243 | 0.1094 | 0.3992 | 0.0541 |
+| fade_out | dcp | 243 | 0.0273 | 0.0247 | <0.0001 |
+| fade_out | cap | 243 | 0.0096 | 0.3580 | <0.0001 |
+| fade_out | bccr | 243 | 0.0254 | 0.0165 | <0.0001 |
+| fade_out | v1 | 243 | -0.0044 | 0.5597 | 0.0005 |
+
+**v2 vs v1.** v2 changes PSNR by **-0.32 dB** (p = 0.0002), SSIM by **-0.0023** (p = 0.4416), CIEDE2000 by **-0.120** (lower better; p = 0.2341), NIQE by **+0.109** (lower better; p = 0.0541) and FADE by **-0.0044** (lower better; p = 0.0005). So v2 is **not** an aggregate improvement over v1: it loses a small but significant amount of PSNR, is statistically tied on SSIM and CIEDE2000, is slightly worse on NIQE and slightly better on FADE. The honest conclusion is that the three v2 upgrades did not generalise from calib to the SOTS test average.
+
+**Indoor vs outdoor.** v2 helps the 22 indoor pairs (+0.75 dB PSNR, +0.0118 SSIM) but hurts the 221 outdoor pairs (-0.43 dB PSNR, -0.0037 SSIM). The sky/local intervention is plausible for indoor scenes with large bright regions; outdoor scenes dominate the average and are where the sky mask and local map most often over- or under-correct. The indoor subset is small (n = 22), so this split is descriptive, not a powered test.
+
+**Stronger baselines.** CAP is a much stronger PSNR baseline than fixed DCP (18.09 dB vs 15.71 dB), although its SSIM is lower (0.7833). Against CAP, v2 gains +0.36 dB PSNR (p = 0.0926; not significant at 0.05), +0.1040 SSIM and -0.454 CIEDE2000. BCCR-style is weaker on PSNR/SSIM but has the best NIQE on both SOTS and RTTS, i.e. it is the most 'natural' but under-enhances detail. The adaptive advantage is therefore mostly structural/colour, not raw PSNR, once a stronger baseline is included.
+
+**Brightness/colour diagnostic (not a result).** Matching each output's per-channel mean/std to the GT before PSNR raises v1 by 3.11 dB and v2 by 3.80 dB; after matching, v2 is +0.37 dB relative to v1. This indicates that part of v2's raw PSNR loss is a global brightness/colour shift rather than lost structure. It is diagnostic only and is not used in any headline claim.
+
+**RTTS.** v1 remains stronger on entropy gain (0.4165 vs 0.3063) and edge preservation (1.6733 vs 1.4729); v2 has a slightly lower FADE (0.4586 vs 0.4677) but a higher NIQE (1.7760 vs 1.4982) and more colour cast (0.0174 vs 0.0129). No single method wins every no-reference metric.
+
+### 9.5 Ablation: one step at a time
+
+![v2 ablations](../results/figures/v2_ablations.png)
+
+| variant | n | psnr | ssim | ciede2000 | niqe_out | fade_out | runtime_ms |
+|---|---|---|---|---|---|---|---|
+| v1 | 243 | 18.7750 | 0.8896 | 9.5014 | 1.6850 | 0.4051 | 228.0575 |
+| v2_airlight | 243 | 18.8786 | 0.8895 | 9.4457 | 1.7225 | 0.4045 | 240.7161 |
+| v2_airlight_sky | 243 | 19.4101 | 0.8933 | 8.9904 | 1.8043 | 0.4067 | 268.6254 |
+| v2_local_omega | 243 | 18.5439 | 0.8815 | 9.6375 | 1.8966 | 0.4061 | 666.2347 |
+| v2_local_enhance | 243 | 18.4503 | 0.8873 | 9.3814 | 1.7943 | 0.4007 | 679.6421 |
+| v2_full | 243 | 18.4503 | 0.8873 | 9.3814 | 1.7943 | 0.4007 | 678.1471 |
+
+Step deltas (PSNR / SSIM): +airlight +0.10 dB / -0.0001; +sky +0.53 dB / +0.0038; +local omega -0.87 dB / -0.0119; +local enhancement -0.09 dB / +0.0058. The full row has the same metrics as the local-enhancement row (only timing noise differs); fast Retinex was rejected on calib (see §9.7), so the two metric rows are identical.
+
+The sky step is the only component that improves both PSNR and SSIM: airlight+sky alone reaches 19.41 dB / 0.8933 (+0.64 dB / +0.0037 vs v1). The local omega/t0 maps as configured lose 0.87 dB and 0.0119 SSIM; the enhancement blend recovers SSIM but not PSNR. This is why full v2 ends below v1 even though the sky stage alone would be above it. Because dropping the local maps after seeing this test ablation would be test-set tuning, the frozen full-v2 config is kept and the v2-light variant is reported only as a direction for future work.
+
+### 9.6 Density validation
+
+| signal | vs beta (validation) | within-scene | vs FADE (RTTS) |
+|---|---|---|---|
+| global | 0.907 | 0.992 | 0.933 |
+| local_mean | 0.948 | 1.000 | 0.817 |
+| dc_only | 0.928 |  | 0.762 |
+| dc_entropy | 0.917 |  | 0.904 |
+| contrast_std | -0.780 |  | -0.611 |
+| ridge | 0.925 | 1.000 | 0.969 |
+
+Local density is the best single signal on the beta sweep (0.948 vs 0.907 global, 0.948 best fixed); within-scene it is monotone (1.000 vs 0.992). On real RTTS the ordering flips: global density correlates better with FADE (0.933 vs 0.817), while the calib-fitted ridge weights are best (0.969). The ridge weights beat the global score on the beta sweep by +0.017 but not the local mean, so we report them as an experiment, not as the shipped density estimator. `contrast_std` is raw contrast (higher = clearer), hence its negative sign; the score uses `1 - normalised contrast`.
+
+### 9.7 Runtime and trade-offs
+
+| method | SOTS ms | RTTS ms | x v1 |
+|---|---|---|---|
+| bccr | 83.0597 | 76.8597 | 0.4319 |
+| cap | 38.1772 | 36.9873 | 0.1985 |
+| dcp | 59.3772 | 53.2229 | 0.3087 |
+| v1 | 192.3152 | 131.5464 | 1.0000 |
+| v2 | 561.7177 | 479.0463 | 2.9208 |
+
+v2 takes **562 ms/image** on SOTS versus **192 ms** for v1 and **59 ms** for fixed DCP. The main extra cost is the local density map (rank entropy + local statistics), which is computed once per image and reused by the omega/t0 interpolation and the enhancement blend. Fast Retinex was implemented (guided-filter illumination on a half-resolution copy) and rejected: on calib it lost 0.31 dB PSNR and 0.0042 SSIM for only ~40 ms (8%).
+
+### 9.8 Limitations of v2
+
+* v2 does **not** beat v1 on aggregate SOTS PSNR/SSIM; v1 remains the recommended default.
+* The indoor gain is based on 22 pairs only; outdoor scenes dominate and show a loss.
+* NIQE-style and FADE-style are locally fitted / fixed-weight proxies, not the official learned models; they are useful for relative trends only.
+* CAP is a strong PSNR baseline; BCCR-style is simplified (boundary constraint + guided filter), not the full L1 contextual solver.
+* The airlight/sky knobs were tuned on 36 calib images (29 with sky), so the tuning set is small and may not cover all outdoor sky types.
+* v2 is ~2.9x slower than v1 and ~9x slower than fixed DCP on CPU.
+<!-- V2_SECTION_END -->
+
 ## References
 
 1. K. He, J. Sun, X. Tang. Single Image Haze Removal Using Dark Channel Prior. CVPR 2009.
@@ -348,3 +516,14 @@ the committed scripts and CSVs.
 4. D. J. Jobson, Z. Rahman, G. A. Woodell. A Multiscale Retinex for Bridging the Gap
    Between Color Image and Human Vision. IEEE TIP, 1997.
 5. B. Li et al. Benchmarking Single-Image Dehazing and Beyond. IEEE TIP, 2019.
+6. Q. Zhu, J. Mai, L. Shao. A Fast Single Image Haze Removal Algorithm Using Color
+   Attenuation Prior. IEEE TIP, 2015.
+7. G. Meng, Y. Wang, J. Duan, S. Xiang, C. Pan. Efficient Image Dehazing with Boundary
+   Constraint and Contextual Regularization. ICCV, 2013.
+8. G. Sharma, W. Wu, E. N. Dalal. The CIEDE2000 Color-Difference Formula: Implementation
+   Notes, Supplementary Test Data, and Mathematical Observations. Color Research &
+   Application, 2005.
+9. A. Mittal, R. Soundararajan, A. C. Bovik. Making a "Completely Blind" Image Quality
+   Analyzer. IEEE Signal Processing Letters, 2013.
+10. L. K. Choi, J. You, A. C. Bovik. Referenceless Prediction of Perceptual Fog Density
+    and Perceptual Image Defogging. IEEE TIP, 2015.

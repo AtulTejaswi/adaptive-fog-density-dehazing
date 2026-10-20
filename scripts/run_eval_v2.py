@@ -125,7 +125,7 @@ def main() -> int:
 
     # ---------------- summary by split / group / method -------------------
     def summarize(group_cols):
-        agg = {m: "mean" for m in METRICS + ["psnr_matched", "runtime_ms"]}
+        agg = {m: (m, "mean") for m in METRICS + ["psnr_matched", "runtime_ms"]}
         return (df.groupby(group_cols).agg(n=("id", "count"), **agg)
                 .reset_index())
 
@@ -153,6 +153,7 @@ def main() -> int:
         split_df = df[df["split"] == split]
         for metric in ("psnr", "ssim", "ciede2000", "niqe_out", "fade_out",
                        "entropy_gain", "edge_preservation"):
+            lower_better = metric in {"ciede2000", "niqe_out", "fade_out"}
             v2 = split_df[split_df.method == "v2"].set_index("id")[metric]
             for other in ("dcp", "cap", "bccr", "v1"):
                 base = split_df[split_df.method == other].set_index("id")[metric]
@@ -165,11 +166,14 @@ def main() -> int:
                 if not np.any(finite):
                     continue
                 test = paired_test(a[finite], b[finite])
+                improvement = (b[finite] - a[finite]) if lower_better else (a[finite] - b[finite])
                 comparisons.append({
                     "split": split, "metric": metric, "v2_vs": other, "n": test["n"],
+                    "lower_is_better": bool(lower_better),
                     "v2_mean": float(np.nanmean(a[finite])),
                     "other_mean": float(np.nanmean(b[finite])),
-                    "mean_diff": test["mean_diff"], "win_rate": test["win_rate"],
+                    "mean_diff": test["mean_diff"],
+                    "win_rate_better": float(np.mean(improvement > 0)),
                     "p_value": test.get("p_value", np.nan),
                 })
     comparison = pd.DataFrame(comparisons)

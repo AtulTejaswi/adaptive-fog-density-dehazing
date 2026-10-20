@@ -128,9 +128,22 @@ def main() -> int:
         within[key] = float(np.nanmean(values)) if values else float("nan")
 
     delta = val_corr["ridge"] - val_corr["global"]
-    conclusion = ("The ridge weights fitted on calib do not materially improve the beta "
-                  "correlation" if delta <= 0.01 else
-                  "The calib-fitted ridge weights improve the beta correlation")
+    best_fixed = max(val_corr["global"], val_corr["local_mean"])
+    if best_fixed == val_corr["local_mean"]:
+        conclusion = (
+            f"Local density gives the best beta correlation on the validation sweep "
+            f"({val_corr['local_mean']:.3f} vs {val_corr['global']:.3f} global); calib-fitted "
+            f"ridge weights improve over the global score ({val_corr['ridge']:.3f}) but not over "
+            f"the local mean. On RTTS (FADE), ridge correlates best ({rtts_corr['ridge']:.3f}) "
+            f"while the local mean is weaker ({rtts_corr['local_mean']:.3f})."
+        )
+    else:
+        conclusion = (
+            f"Calib-fitted ridge weights improve the beta correlation by {delta:+.3f} over the "
+            f"global score (validation {val_corr['ridge']:.3f} vs {val_corr['global']:.3f}); "
+            f"on RTTS ridge vs FADE is {rtts_corr['ridge']:.3f} vs {rtts_corr['global']:.3f} "
+            f"for the global score."
+        )
     payload = {
         "n_validation": int(len(validation)),
         "n_rtts": int(len(rtts)),
@@ -160,7 +173,7 @@ def main() -> int:
     for key in ("global", "local_mean", "dc_only", "dc_entropy", "contrast_std", "ridge"):
         lines.append(f"| {key} | {val_corr[key]:.3f} | "
                      f"{within.get(key, float('nan')):.3f} | {rtts_corr[key]:.3f} |")
-    lines += ["", f"Ridge weights (standardised): {weights}", "", conclusion + "."]
+    lines += ["", f"Ridge weights (standardised): {weights}", "", conclusion]
     resolve_path("results/v2_density_validation.md").write_text("\n".join(lines) + "\n",
                                                                encoding="utf-8")
     print("[density-v2] validation:", {k: round(v, 3) for k, v in val_corr.items()})

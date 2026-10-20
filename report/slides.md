@@ -1,8 +1,8 @@
-# Slides outline — Adaptive Fog-Density-Aware Dehazing
+# FogSense — slides outline
 
-**15 slides, ~10 minutes**
+**18 slides (v1: 15, v2: 3), ~12 minutes**
 
-1. **Title** — Adaptive, Fog-Density-Aware Single-Image Dehazing. IPA project.
+1. **Title** — FogSense: An Intelligent Multi-Algorithm Framework for Adaptive Haze Removal. IPA project.
 2. **Problem** — haze scattering; fixed DCP over-corrects light haze, under-corrects dense haze. Before/after example.
 3. **Atmospheric model** — `I = Jt + A(1-t)`, `t = exp(-beta d)`; what must be estimated.
 4. **Pipeline overview** — preprocessing → density → selector → DCP + enhancement → evaluation.
@@ -25,3 +25,11 @@
 * Toggle enhancements to reproduce ablation rows live.
 * Point out the transmission map and the `mean t` value.
 * Close with the honest failure grid: sky and white objects.
+
+<!-- V2_SLIDES_START -->
+## v2 upgrade (slides 16-18)
+
+16. **What changed in v2 (opt-in).** v2 airlight (connected + low-gradient candidates), conservative sky mask (floor t, blend back), local density map with per-pixel omega(x)/t0(x), spatially blended enhancement. All flags off = v1 byte-identical.
+17. **v2 results (SOTS 243).** v2 **18.45 dB / 0.8873** vs v1 **18.78 dB / 0.8896** (-0.32 dB, -0.0023 SSIM). Indoor +0.75 dB / +0.0118 SSIM; outdoor -0.43 dB / -0.0037 SSIM. Stronger CAP baseline: 18.09 dB / 0.7833; v2 vs CAP +0.36 dB PSNR / +0.1040 SSIM.
+18. **Honest takeaway.** v2 improves CIEDE2000 (-0.120) and indoor scenes but not aggregate PSNR/SSIM; v1 stays the default. NIQE/FADE are style proxies. Runtime 562 ms vs 192 ms (v1) vs 59 ms (DCP).
+<!-- V2_SLIDES_END -->

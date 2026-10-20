@@ -16,6 +16,8 @@ python scripts/tune_v2.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 python scripts/run_eval_v2.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+python scripts/profile_v2.py
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 python scripts/run_ablations_v2.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 python scripts/validate_density_v2.py

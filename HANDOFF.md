@@ -1,46 +1,32 @@
 # HANDOFF (overwrite at the end of every session; keep under 30 lines)
 
 ## State
-Project complete, verified and reproducible (v3 end-to-end acceptance passed; see
-`results/FINALIZATION_AUDIT.md`). Real SOTS: 299 calib / 243 test pairs, split by unique
-clear scene. Parameters calibrated + tuned on calib only and frozen at tag
-`v0.1-frozen-params` before testing. Real 72-image RTTS no-reference set is used
-(via `scripts/download_rtts.py` + `scripts/rtts_subset.txt`). Data was deleted and
-rebuilt from scratch in a clean venv and the full pipeline reproduced the headline
-numbers; baseline fairness is audited by `scripts/audit_baseline.py`; leakage is
-guarded by `tests/test_splits_leakage.py`; robustness by `tests/test_edge_cases.py`.
+Project complete: v1.0 is the reproducible default, plus an **opt-in v2** upgrade
+(MASTER_PROMPT_v4) on branch `v2-upgrade`. v1 tags `v0.1-frozen-params` / `v1.0` are
+untouched. v2 params were frozen at `v2.0-frozen-params` before the first v2 test run;
+final deliverable tag `v2.0`. 83 tests pass, including a bit-exact flags-off v1
+compatibility test (`tests/test_v2_compat.py`). v2 is **not** an aggregate win over v1:
+SOTS 18.45 dB / 0.8873 vs 18.78 / 0.8896; it helps indoor (+0.75 dB / +0.0118) and
+CIEDE2000 and hurts the 221 outdoor pairs. CAP is a strong PSNR baseline (18.09 / 0.7833)
+vs fixed DCP (15.71 / 0.8263). The sky step alone is +0.64 dB / +0.0037; the local
+omega/t0 maps as tuned lose 0.87 dB / 0.0119 SSIM. v1 stays the recommended default.
 
-Key results (SOTS test): adaptive **18.78 dB / 0.8896** vs baseline **15.71 dB /
-0.8263**; +3.07 dB, +0.0633 SSIM; 96.3% PSNR / 90.1% SSIM win rate. Density score vs
-beta: overall Spearman 0.907, within-scene mean 0.992. Runtime ~256 ms/image (CPU, varies by machine).
-Real 72-image RTTS: entropy gain +0.325, contrast +0.173, edge ratio +0.477 vs baseline.
-Ablations: no-enh 17.77/0.8726; CLAHE 18.18/0.8850; CLAHE+Retinex 19.30/0.8840;
-continuous selector 18.80/0.8574; classifier 18.40/0.8780.
-
-## Do next (in order)
-1. Open `results/evaluation_summary.md`, `results/results_table.md`,
-   `results/ablations.md`, `results/baseline_audit_summary.csv`, `report/report.md`,
-   `report/slides.md`.
-2. Demo: `streamlit run app/app.py`.
-3. Data rebuild (verified from scratch): `python scripts/download_data.py`,
-   `python scripts/download_rtts.py`, `python scripts/prepare_data.py --no-download`.
-4. If changing any data/parameters, re-run the full `./run_all.ps1` and re-tag.
-5. Test suite: `python -m pytest -q` (66 tests: pipeline + splits/leakage + edge cases).
+## Do next
+1. Read report §9, `results/v2_*`, `results/v2_key_findings.md`.
+2. Demo: `streamlit run app/app.py` (v2 toggle, local-density/sky maps).
+3. Full v2 run: `./run_all_v2.ps1 --no-download`; v1 run: `./run_all.ps1`.
+4. Tests: `python -m pytest -q` (83). Do not retune v2 on test; refit on calib and re-tag.
 
 ## Gotchas
-- Never tune on `test_sots` / `test_rtts`; thresholds/params are calib-only.
+- Never tune on `test_sots` / `test_rtts`; v2 artifacts are calib-only.
+- NIQE-style / FADE-style are proxies, not the official learned models.
+- v2 local density is the main cost (~405 ms/image); v2 total 562 ms vs v1 192 ms.
+- CAP is real; BCCR is a documented simplified version (boundary constraint + GF).
+- Windows cp1252 console: avoid printing Greek symbols; files are UTF-8.
 - `data/` images are gitignored; `data/splits.json` + `data/README.md` are committed.
-- RTTS images are gitignored; re-download with `scripts/download_rtts.py`. The
-  synthetic RTTS-style fallback stays available when `data/RTTS/` is empty.
-- Windows console is cp1252: avoid printing Greek symbols from scripts (files are UTF-8).
-- On Windows `data/RTTS` and `data/rtts` are the same folder; `prepare_data.py`
-  de-duplicates by real path.
-- `preprocess_array` accepts 2D grayscale, `HxWx1` and `HxWx4` arrays and raises a clear
-  error for any other shape (guarded by `tests/test_edge_cases.py`).
-- Runtime is machine-dependent; `results/runtime_summary.csv` is the source of truth
-  (current run: 256 ms/image on SOTS). Do not hard-code runtime in prose.
 
 ## Files touched last session
-- `tests/test_edge_cases.py` (new), `src/preprocess.py`, `README.md`, `PROGRESS.md`,
-  `HANDOFF.md`, `DECISIONS.md`, `report/report.md`, `report/slides.md`,
-  `results/FINALIZATION_AUDIT.md`, regenerated `config/*` and `results/*`.
+`src/{sky,dcp,density,selector,pipeline,baseline,metrics,config,enhance}.py`, `app/app.py`,
+`config/{calibration_local,niqe_model,tuned_params_v2}.json`, `scripts/*v2*`,
+`scripts/profile_v2.py`, `run_all_v2.ps1`, `tests/test_v2_*.py`, `report/*`,
+`README.md`, `PROGRESS.md`, `DECISIONS.md`, `HANDOFF.md`, `results/v2_*`.

@@ -1,0 +1,45 @@
+{
+  "n_validation": 64,
+  "n_rtts": 72,
+  "validation_vs_beta": {
+    "global": 0.9074463622480382,
+    "local_mean": 0.9479797572175218,
+    "dc_only": 0.9276878792251139,
+    "dc_entropy": 0.9166984662676961,
+    "contrast_std": -0.7803852051237699,
+    "ridge": 0.9247232444820451
+  },
+  "validation_within_scene_vs_beta": {
+    "global": 0.9915775541046139,
+    "local_mean": 1.0,
+    "ridge": 1.0
+  },
+  "rtts_vs_fade": {
+    "global": 0.9328649179100557,
+    "local_mean": 0.8166441571805261,
+    "dc_only": 0.7620705601906946,
+    "dc_entropy": 0.9039047496188183,
+    "contrast_std": -0.6106823589941476,
+    "ridge": 0.9690976911698502
+  },
+  "ridge": {
+    "alpha": 1.0,
+    "weights": {
+      "dark_channel": 0.22122944680109635,
+      "entropy": 0.007072142179958993,
+      "contrast": -0.16958633091145414,
+      "saturation": -0.019248195889944402
+    },
+    "n_synthetic": 160,
+    "synthetic_betas": [
+      0.3,
+      0.6,
+      1.0,
+      1.5
+    ],
+    "fitted_on": "calib_clear_synthetic"
+  },
+  "ridge_minus_global_validation": 0.01727688223400692,
+  "conclusion": "Local density gives the best beta correlation on the validation sweep (0.948 vs 0.907 global); calib-fitted ridge weights improve over the global score (0.925) but not over the local mean. On RTTS (FADE), ridge correlates best (0.969) while the local mean is weaker (0.817).",
+  "note": "FADE is a simplified fixed-weight FADE-style index (documented in the report)."
+}

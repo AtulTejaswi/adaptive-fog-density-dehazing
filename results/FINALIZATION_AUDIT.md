@@ -147,3 +147,80 @@ frozen-params tag `v0.1-frozen-params` was not moved. All acceptance steps passe
 8. Optional exports: skipped (rubric format unknown; D-00/D-34).
 - Headline (unchanged): adaptive 18.78 dB / 0.8896 vs fixed DCP 15.71 dB / 0.8263.
 - No further changes required unless the rubric asks for a specific report/slide format.
+
+---
+
+# v2 upgrade audit (MASTER_PROMPT_v4)
+
+## 1. Branch, tags, compatibility
+- Branch `v2-upgrade` created off `main` (`0073830`). `v0.1-frozen-params` (`ead40e6`)
+  and `v1.0` are untouched.
+- Every new feature is behind `params.v2.*`; `config/params.yaml` still defaults to v1.
+  `tests/test_v2_compat.py` (4 tests) proves the flags-off path is byte-identical to v1
+  (`array_equal`) and that scalar/array omega/t0 agree.
+- Full suite: **83 passed** (66 v1 + 4 compat + 13 v2 features).
+
+## 2. Calib-only fitting and freeze
+- `scripts/calibrate_local.py` -> `config/calibration_local.json` (299 calib images,
+  class centroids light 0.2710 / moderate 0.4919 / heavy 0.7058).
+- `scripts/fit_niqe_model.py` -> `config/niqe_model.json` (299 calib clear images).
+- `scripts/tune_v2.py` -> `config/tuned_params_v2.json` +
+  `results/v2_tuning_grid.csv` (36 calib, 12/class; 29 with sky).
+- Frozen at tag **`v2.0-frozen-params`** before the first v2 test-split run. No test
+  image was used for any fit, threshold, or selection.
+
+## 3. Frozen choices
+- airlight = v2 (connected + low-gradient candidates; quadtree rejected on calib).
+- sky `t_floor=0.25`, `blend=0.25`.
+- local density enabled; local enhancement blend enabled with `floor=0.0`.
+- Retinex fast = false (rejected: -0.31 dB / -0.0042 SSIM for ~40 ms).
+
+## 4. Test evaluation (315 images x 5 methods)
+- SOTS (243): v2 18.4503 / 0.8873 vs v1 18.7750 / 0.8896; CIEDE2000 9.3814 vs
+  9.5014; NIQE-style 1.7943 vs 1.6850; FADE-style 0.4007 vs 0.4051.
+- Paired v2-vs-v1: PSNR -0.3247 (p=0.0002), SSIM -0.0023 (p=0.4416),
+  CIEDE2000 -0.1201 (p=0.2341), NIQE +0.1094 (p=0.0541), FADE -0.0044 (p=0.0005).
+- Indoor (22): v2 20.5578 / 0.8528 vs v1 19.8113 / 0.8410 (+0.75 dB / +0.0118).
+  Outdoor (221): v2 18.2405 / 0.8907 vs v1 18.6719 / 0.8944 (-0.43 dB / -0.0037).
+- Strong baselines: CAP 18.0912 / 0.7833, BCCR-style 16.0186 / 0.8309, DCP
+  15.7100 / 0.8263. v2 vs CAP: +0.3591 dB (p=0.0926), +0.1040 SSIM.
+- RTTS (72, no GT): v1 entropy +0.4165 / edge 1.6733 / cast 0.0129; v2 +0.3063 /
+  1.4729 / 0.0174; v2 FADE 0.4586 vs v1 0.4677; BCCR best NIQE/FADE
+  (1.2476 / 0.4448).
+- Brightness/colour-match diagnostic: v2 matched PSNR 22.2552 vs v1 21.8847
+  (+0.37 dB), i.e. part of the raw gap is a global brightness/colour shift.
+  Diagnostic only, never a headline.
+
+## 5. Ablation (SOTS, 243 x 6)
+- v1 18.7750/0.8896; +airlight 18.8786/0.8895; +sky 19.4101/0.8933;
+  +local omega 18.5439/0.8815; +local enhancement 18.4503/0.8873; full 18.4503/0.8873.
+- The sky step is the only component that improves both PSNR and SSIM (+0.53 dB /
+  +0.0038 over airlight). Local omega/t0 as tuned loses 0.87 dB / 0.0119 SSIM.
+  The v2-light variant (airlight+sky) is +0.64 dB / +0.0037 vs v1, but selecting it
+  after the test ablation would be test tuning, so it is future work only.
+
+## 6. Density validation (64 sweep / 72 RTTS)
+- vs beta: global 0.907, local mean 0.948, dc_only 0.928, dc_entropy 0.917,
+  contrast_std -0.780 (raw contrast, sign flips in the score), ridge 0.925.
+- within-scene: global 0.992, local mean 1.000, ridge 1.000.
+- RTTS vs FADE: global 0.933, local mean 0.817, dc_only 0.762, dc_entropy 0.904,
+  contrast_std -0.611, ridge 0.969.
+- Ridge improves over the *global* score but not the local mean on beta; it is an
+  experiment, not the shipped estimator.
+
+## 7. Runtime profile (10 SOTS images)
+- v1: density 25.8 / dcp 61.3 / enhance 133.9 / total 222.1 ms.
+- v2: density 26.5 / local density 405.5 / dcp 90.0 / enhance 133.8 / total 667.7 ms.
+- End-to-end eval (243): v2 561.7 ms vs v1 192.3 ms vs DCP 59.4 ms.
+
+## 8. Honest conclusion
+- v2 does **not** beat v1 on aggregate SOTS PSNR/SSIM and is ~2.9x slower. It improves
+  CIEDE2000, indoor scenes, and the sky failure cases; CAP narrows the PSNR advantage
+  over fixed DCP. v1 remains the recommended default. No number in the report was
+  fabricated; all v2 numbers come from `results/v2_*`.
+
+## 9. Repo / docs / tags
+- Report §9, slides 16-18, README v2 block, DECISIONS D-35..D-41, PROGRESS and
+  HANDOFF updated. Figures in `results/figures/v2_*.png`.
+- `v0.1-frozen-params` and `v1.0` untouched; `v2.0-frozen-params` on the freeze
+  commit; final `v2.0` on the deliverable commit.
