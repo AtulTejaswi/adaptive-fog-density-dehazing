@@ -1,0 +1,1445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FogSense report</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", "Calibri", Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.45;
+    color: #1B2733;
+    margin: 0;
+  }
+  h1 { font-size: 20pt; color: #0B1F33; border-bottom: 2px solid #0E7C86; padding-bottom: 4px; page-break-before: always; }
+  h1:first-of-type { page-break-before: auto; }
+  h2 { font-size: 15pt; color: #0B1F33; margin-top: 14pt; page-break-after: avoid; }
+  h3 { font-size: 12.5pt; color: #0E7C86; margin-top: 10pt; page-break-after: avoid; }
+  p, li { orphans: 3; widows: 3; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background: #F1F4F8; padding: 1px 3px; border-radius: 3px; }
+  pre { background: #F1F4F8; padding: 8px; border-radius: 4px; overflow-x: auto; page-break-inside: avoid; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; page-break-inside: avoid; font-size: 9pt; }
+  th, td { border: 1px solid #C9D2DB; padding: 4px 6px; vertical-align: top; }
+  th { background: #0B1F33; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #F7F9FB; }
+  img { max-width: 100%; height: auto; page-break-inside: avoid; margin: 6pt 0; border: 1px solid #E3E8EE; }
+  blockquote { border-left: 3px solid #0E7C86; margin: 8pt 0; padding: 4pt 10pt; color: #445566; background: #F7F9FB; }
+  hr { border: none; border-top: 1px solid #C9D2DB; margin: 10pt 0; }
+  ul, ol { margin: 4pt 0 8pt 18pt; }
+</style>
+</head>
+<body>
+<h1 id="fogsense-an-intelligent-multi-algorithm-framework-for-adaptive-haze-removal">FogSense: An Intelligent Multi-Algorithm Framework for Adaptive Haze Removal</h1>
+<p><strong>IPA course project — final report</strong></p>
+<blockquote>
+<p>Every numeric value in this report is generated from files under <code>results/</code>.<br>
+Regenerate v1 with <code>./run_all.ps1</code> (or the individual scripts listed in the README);<br>
+regenerate v2 with <code>./run_all_v2.ps1</code>.</p>
+</blockquote>
+<hr>
+<h2 id="abstract">Abstract</h2>
+<p>Haze scattering reduces contrast and colour fidelity, and a fixed-parameter dehazer<br>
+applies the same correction to light and dense fog. We present <strong>FogSense</strong>, a classical,<br>
+density-aware, multi-algorithm framework that estimates a fog-density score from three<br>
+image statistics, selects a light / moderate / heavy strategy, applies Dark Channel Prior<br>
+(DCP) dehazing with class-specific parameters refined by a guided filter, and then<br>
+optionally applies Retinex illumination correction, CLAHE and gray-world colour<br>
+correction. We compare the adaptive pipeline against a fixed-parameter DCP baseline. On 243 held-out SOTS<br>
+pairs the adaptive pipeline improves PSNR from 15.71 dB to 18.78 dB and SSIM from<br>
+0.8263 to 0.8896, with a 96.3% PSNR win rate and improvements in every estimated haze<br>
+class. We also report a no-reference real-world RTTS set, component/feature/selector<br>
+ablations, runtime and failure cases. An opt-in v2 extension (v2 airlight/sky, local<br>
+density maps, stronger CAP/BCCR baselines) is evaluated separately in §9: it improves<br>
+indoor SOTS and CIEDE2000 but does <strong>not</strong> beat v1 on aggregate SOTS PSNR/SSIM, and the<br>
+stronger CAP baseline narrows the adaptive PSNR advantage.</p>
+<hr>
+<h2 id="1-introduction">1. Introduction</h2>
+<p>Fog and haze scatter and attenuate light before it reaches the camera. The observed<br>
+image can be described by the atmospheric scattering model:</p>
+<pre><code>I(x) = J(x) t(x) + A (1 - t(x)),    t(x) = exp(-beta d(x))
+</code></pre>
+<p>where <code>J</code> is the clear scene radiance, <code>A</code> the atmospheric light, <code>t</code> the transmission<br>
+and <code>beta d(x)</code> the optical depth. Inverting the model requires estimating <code>A</code> and <code>t</code>.</p>
+<p>A standard Dark Channel Prior (DCP) uses one fixed correction strength for every<br>
+image. On light haze this over-corrects (dark, unnatural results, lost colour); on dense<br>
+haze it under-corrects. The project hypothesis is that <strong>estimating fog density first<br>
+and adapting the correction strength and enhancement strategy</strong> yields more consistent<br>
+results across haze levels.</p>
+<p>We call the resulting framework <strong>FogSense</strong>. It is <em>multi-algorithm</em> because the same<br>
+density-aware interface can dispatch the adaptive DCP pipeline and the fixed DCP, CAP and<br>
+BCCR-style baselines, and <em>intelligent</em> in the sense of density-aware rule-based<br>
+adaptation, not a trained deep network. The v2 extension adds an optional atmospheric-<br>
+light/sky stage and local density maps; §9 evaluates it honestly against v1.</p>
+<p>Contributions:</p>
+<ol>
+<li>A label-free fog-density score built from dark-channel mean, entropy and contrast,<br>
+   normalised on a calibration split and validated against known <code>beta</code>.</li>
+<li>A rule-based, per-class parameter selector with two optional ablations<br>
+   (continuous interpolation, shallow decision tree).</li>
+<li>A fully reproducible classical pipeline and evaluation harness with per-class<br>
+   PSNR/SSIM, no-reference metrics, runtime, ablations and a Streamlit demo.</li>
+</ol>
+<hr>
+<h2 id="2-related-work">2. Related work</h2>
+<p><strong>Dark Channel Prior.</strong> He et al. observed that in haze-free outdoor images at least one<br>
+colour channel is close to zero in most local patches. The dark channel therefore<br>
+estimates haze thickness; transmission is <code>1 - omega * dark(I/A)</code> and the scene is<br>
+recovered by inverting the scattering model. A transmission floor <code>t0</code> limits noise<br>
+amplification.</p>
+<p><strong>Guided filter.</strong> He et al. refine the noisy transmission map with an edge-preserving<br>
+linear filter. We implement the box-filter version locally, so OpenCV-contrib is not<br>
+required.</p>
+<p><strong>CLAHE.</strong> Zuiderveld's contrast-limited adaptive histogram equalisation improves local<br>
+contrast with a clip limit that prevents noise amplification. We apply it on the L<br>
+channel in LAB to preserve hue and saturation, and blend the equalised luminance with<br>
+the dehazed image (strength 0.4) to avoid over-sharpening on benchmark pairs.</p>
+<p><strong>Retinex.</strong> Jobson et al. model illumination as a smooth component; subtracting<br>
+Gaussian-blurred log-luminance yields a reflectance-like image. We use multi-scale<br>
+Retinex on luminance and preserve colour via a gain map.</p>
+<p><strong>Gray-world.</strong> The average scene colour is assumed gray; per-channel gains remove<br>
+residual colour cast after dehazing.</p>
+<hr>
+<h2 id="3-method">3. Method</h2>
+<h3 id="31-preprocessing">3.1 Preprocessing</h3>
+<p>Images are converted to RGB float32 in <code>[0, 1]</code>, resized so the long side is 640 px<br>
+(area interpolation for downscaling), and lightly denoised with a bilateral filter<br>
+(diameter 5, sigma 20). The same preprocessing is used by baseline and adaptive methods.</p>
+<h3 id="32-fog-density-estimation">3.2 Fog-density estimation</h3>
+<p>For each image we compute:</p>
+<ul>
+<li><strong>dark-channel mean</strong> with a 15×15 patch (higher = hazier),</li>
+<li><strong>Shannon entropy</strong> of the grayscale histogram (lower = hazier),</li>
+<li><strong>global contrast</strong> = mean of RMS contrast and Michelson contrast (lower = hazier).</li>
+</ul>
+<p>Each feature is percentile-normalised (<code>p2</code>–<code>p98</code>) using statistics fitted on the<br>
+<strong>calib</strong> split only. The score is</p>
+<pre><code>score = 0.45 * ndc + 0.30 * (1 - nentropy) + 0.25 * (1 - ncontrast)
+</code></pre>
+<p>and lies in <code>[0, 1]</code>. The three weights live in <code>config/params.yaml</code>; the fitted<br>
+normalisation and thresholds live in <code>config/calibration.json</code>.</p>
+<h3 id="33-adaptive-strategy-selection">3.3 Adaptive strategy selection</h3>
+<p>Thresholds <code>t1</code>, <code>t2</code> are the tertiles of the calibration score distribution. Images<br>
+below <code>t1</code> are <strong>light</strong>, between <code>t1</code> and <code>t2</code> <strong>moderate</strong>, above <code>t2</code> <strong>heavy</strong>.<br>
+Each class has its own <code>omega</code>, <code>t0</code>, guided-filter radius/epsilon, CLAHE clip and<br>
+Retinex strength. Parameters are fitted on calib with a constrained two-stage search<br>
+(omega × t0, then CLAHE clip × Retinex strength); constraints encode the physical prior<br>
+that correction strength increases with density.</p>
+<p><img alt="Selected parameters" src="../results/figures/selected_parameters.png"></p>
+<p>Optional variants used as ablations:</p>
+<ul>
+<li><strong>continuous</strong>: interpolate <code>omega</code>, <code>t0</code>, CLAHE clip and Retinex strength from the<br>
+  score rather than using three bins;</li>
+<li><strong>classifier</strong>: depth-3 decision tree on the three normalised features, trained on<br>
+  labelled synthetic haze.</li>
+</ul>
+<h3 id="34-dehazing-and-enhancement">3.4 Dehazing and enhancement</h3>
+<p>DCP estimates the atmospheric light from the brightest 0.1% of dark-channel pixels,<br>
+computes the transmission map, refines it with the guided filter, and recovers radiance<br>
+with <code>J = (I - A) / max(t, t0) + A</code>. The class-specific enhancement chain is<br>
+<strong>Retinex → CLAHE → gray-world</strong>, each step individually switchable.</p>
+<h3 id="35-evaluation">3.5 Evaluation</h3>
+<p>Full-reference on SOTS: PSNR and SSIM against clear ground truth. No-reference on all<br>
+sets: entropy gain, RMS contrast improvement, Sobel edge-preservation ratio and colour<br>
+cast. Runtime is measured per image on CPU. Adaptive and baseline are paired by image;<br>
+we report win rate and a Wilcoxon signed-rank test.</p>
+<hr>
+<h2 id="4-experimental-setup">4. Experimental setup</h2>
+<table>
+<thead>
+<tr>
+<th>item</th>
+<th>value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dataset</td>
+<td>SOTS indoor + outdoor (RESIDE), 542 unique clear scenes</td>
+</tr>
+<tr>
+<td>Calibration</td>
+<td>299 pairs (55%), split by unique clear scene</td>
+</tr>
+<tr>
+<td>SOTS test</td>
+<td>243 pairs (45%)</td>
+</tr>
+<tr>
+<td>No-reference set</td>
+<td>72 real RTTS images (RESIDE-beta, no ground truth)</td>
+</tr>
+<tr>
+<td>Density validation</td>
+<td>8 scenes × 8 beta values = 64 images</td>
+</tr>
+<tr>
+<td>Image size</td>
+<td>long side 640 px</td>
+</tr>
+<tr>
+<td>Baseline</td>
+<td>DCP: omega 0.95, t0 0.10, patch 15, GF r=60 eps=1e-4, no enhancement</td>
+</tr>
+<tr>
+<td>Adaptive</td>
+<td>class-specific params from <code>config/tuned_params.json</code></td>
+</tr>
+<tr>
+<td>Runtime</td>
+<td>CPU, Python 3.12, OpenCV</td>
+</tr>
+</tbody>
+</table>
+<p>The calibration split is used for the density normalisation, tertile thresholds and<br>
+the per-class parameter search. The classifier ablation is trained on the separate<br>
+180-image synthetic selector set, using the calibration normalisation. Test sets are<br>
+evaluated only after <code>config/tuned_params.json</code> is written and the repository is<br>
+tagged <code>v0.1-frozen-params</code>.</p>
+<p>Frozen parameters (all fitted on calib only):</p>
+<table>
+<thead>
+<tr>
+<th>class</th>
+<th>omega</th>
+<th>t0</th>
+<th>CLAHE clip (blend 0.4)</th>
+<th>Retinex strength</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>light</td>
+<td>0.86</td>
+<td>0.35</td>
+<td>1.5</td>
+<td>0.00</td>
+</tr>
+<tr>
+<td>moderate</td>
+<td>0.94</td>
+<td>0.30</td>
+<td>1.5</td>
+<td>0.35</td>
+</tr>
+<tr>
+<td>heavy</td>
+<td>0.94</td>
+<td>0.20</td>
+<td>1.5</td>
+<td>0.00</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="5-results">5. Results</h2>
+<h3 id="51-density-estimation">5.1 Density estimation</h3>
+<p><img alt="Score vs beta" src="../results/figures/score_vs_beta.png"></p>
+<p>The density score rises with <code>beta</code> for every scene. Overall Spearman correlation and<br>
+the stricter within-scene mean are reported in<br>
+<code>results/density_validation_summary.json</code>. The score distributions per split and per<br>
+selected haze class are shown below; the calibration tertiles give three balanced bins.</p>
+<p><img alt="Score histograms" src="../results/figures/score_histograms.png"></p>
+<h3 id="52-baseline-vs-adaptive">5.2 Baseline vs adaptive</h3>
+<!-- RESULTS_TABLE_START -->
+<table>
+<thead>
+<tr>
+<th>split</th>
+<th>class</th>
+<th>method</th>
+<th>psnr</th>
+<th>ssim</th>
+<th>entropy_gain</th>
+<th>contrast_improvement</th>
+<th>edge_preservation</th>
+<th>total_ms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>test_rtts</td>
+<td>all</td>
+<td>adaptive</td>
+<td></td>
+<td></td>
+<td>0.4165</td>
+<td>1.2376</td>
+<td>1.6733</td>
+<td>184.2860</td>
+</tr>
+<tr>
+<td>test_rtts</td>
+<td>all</td>
+<td>baseline</td>
+<td></td>
+<td></td>
+<td>0.0912</td>
+<td>1.0648</td>
+<td>1.1967</td>
+<td>93.6030</td>
+</tr>
+<tr>
+<td>test_rtts</td>
+<td>heavy</td>
+<td>adaptive</td>
+<td></td>
+<td></td>
+<td>0.9994</td>
+<td>1.5693</td>
+<td>1.9917</td>
+<td>145.9313</td>
+</tr>
+<tr>
+<td>test_rtts</td>
+<td>heavy</td>
+<td>baseline</td>
+<td></td>
+<td></td>
+<td>0.7749</td>
+<td>1.4211</td>
+<td>1.5967</td>
+<td>91.6385</td>
+</tr>
+<tr>
+<td>test_rtts</td>
+<td>light</td>
+<td>adaptive</td>
+<td></td>
+<td></td>
+<td>0.0992</td>
+<td>1.0358</td>
+<td>1.3885</td>
+<td>148.0721</td>
+</tr>
+<tr>
+<td>test_rtts</td>
+<td>light</td>
+<td>baseline</td>
+<td></td>
+<td></td>
+<td>-0.1971</td>
+<td>0.8918</td>
+<td>0.9888</td>
+<td>95.4192</td>
+</tr>
+<tr>
+<td>test_rtts</td>
+<td>moderate</td>
+<td>adaptive</td>
+<td></td>
+<td></td>
+<td>0.5391</td>
+<td>1.3865</td>
+<td>2.1562</td>
+<td>389.0011</td>
+</tr>
+<tr>
+<td>test_rtts</td>
+<td>moderate</td>
+<td>baseline</td>
+<td></td>
+<td></td>
+<td>-0.0773</td>
+<td>1.0615</td>
+<td>1.2441</td>
+<td>90.4050</td>
+</tr>
+<tr>
+<td>test_sots</td>
+<td>all</td>
+<td>adaptive</td>
+<td>18.7750</td>
+<td>0.8896</td>
+<td>0.4258</td>
+<td>1.3095</td>
+<td>1.8484</td>
+<td>256.1686</td>
+</tr>
+<tr>
+<td>test_sots</td>
+<td>all</td>
+<td>baseline</td>
+<td>15.7100</td>
+<td>0.8263</td>
+<td>0.1929</td>
+<td>1.2406</td>
+<td>1.3360</td>
+<td>87.1733</td>
+</tr>
+<tr>
+<td>test_sots</td>
+<td>heavy</td>
+<td>adaptive</td>
+<td>16.5079</td>
+<td>0.8672</td>
+<td>0.6102</td>
+<td>1.5378</td>
+<td>1.9581</td>
+<td>148.3146</td>
+</tr>
+<tr>
+<td>test_sots</td>
+<td>heavy</td>
+<td>baseline</td>
+<td>15.1354</td>
+<td>0.8225</td>
+<td>0.4889</td>
+<td>1.4919</td>
+<td>1.5858</td>
+<td>87.3722</td>
+</tr>
+<tr>
+<td>test_sots</td>
+<td>light</td>
+<td>adaptive</td>
+<td>19.8208</td>
+<td>0.9064</td>
+<td>0.1774</td>
+<td>1.1255</td>
+<td>1.5760</td>
+<td>152.1749</td>
+</tr>
+<tr>
+<td>test_sots</td>
+<td>light</td>
+<td>baseline</td>
+<td>16.5759</td>
+<td>0.8399</td>
+<td>-0.0151</td>
+<td>1.0658</td>
+<td>1.2070</td>
+<td>88.7939</td>
+</tr>
+<tr>
+<td>test_sots</td>
+<td>moderate</td>
+<td>adaptive</td>
+<td>19.4352</td>
+<td>0.8902</td>
+<td>0.5232</td>
+<td>1.3156</td>
+<td>2.0214</td>
+<td>429.6232</td>
+</tr>
+<tr>
+<td>test_sots</td>
+<td>moderate</td>
+<td>baseline</td>
+<td>15.3221</td>
+<td>0.8165</td>
+<td>0.1727</td>
+<td>1.2217</td>
+<td>1.2759</td>
+<td>85.5335</td>
+</tr>
+</tbody>
+</table>
+<!-- RESULTS_TABLE_END -->
+
+<p><img alt="Before/after by class" src="../results/figures/before_after_by_class.png"></p>
+<p><img alt="Metrics by class" src="../results/figures/metrics_by_class.png"></p>
+<!-- KEY_FINDINGS_START -->
+<h3 id="key-findings">Key findings</h3>
+<ul>
+<li>
+<p><strong>Density validation.</strong> The score is monotone in beta: overall Spearman rho = 0.907; within-scene mean rho = 0.992 (minimum 0.939 across 8 scenes).</p>
+</li>
+<li>
+<p><strong>SOTS overall.</strong> Adaptive PSNR 18.78 dB vs baseline 15.71 dB; SSIM 0.8896 vs 0.8263. Win rate (adaptive &gt; baseline): PSNR 96.3%, SSIM 90.1%.</p>
+</li>
+<li>
+<p><strong>Per class.</strong> light: delta PSNR +3.24 dB, delta SSIM +0.0665, SSIM win rate 90.6%; moderate: delta PSNR +4.11 dB, delta SSIM +0.0737, SSIM win rate 88.0%; heavy: delta PSNR +1.37 dB, delta SSIM +0.0446, SSIM win rate 92.4%.</p>
+</li>
+<li>
+<p><strong>Real RTTS no-reference set (72 images, no ground truth).</strong> entropy_gain delta +0.3253; contrast_improvement delta +0.1728; edge_preservation delta +0.4767.</p>
+</li>
+<li>
+<p><strong>Runtime.</strong> 256 ms/image (3.9 FPS) on CPU, including preprocessing.</p>
+</li>
+<li>
+<p><strong>Ablation.</strong> Full pipeline SSIM 0.8896 vs no-enhancement 0.8726; dark-channel-only density features give SSIM 0.8831 vs full features 0.8896.</p>
+</li>
+</ul>
+<!-- KEY_FINDINGS_END -->
+
+<h3 id="53-transmission-maps">5.3 Transmission maps</h3>
+<p><img alt="Transmission maps" src="../results/figures/transmission_maps.png"></p>
+<h3 id="54-runtime">5.4 Runtime</h3>
+<p><img alt="Runtime" src="../results/figures/runtime.png"></p>
+<p>On CPU the full adaptive pipeline takes about 256 ms per 640-px image (3.9 FPS),<br>
+compared with about 69 ms for the fixed DCP baseline. The overhead comes from the<br>
+density features and the enhancement chain (Retinex is the most expensive step). The<br>
+class-specific enhancement settings keep the cost bounded; Retinex is disabled for<br>
+light and heavy classes.</p>
+<h3 id="55-no-reference-real-world-set-rtts">5.5 No-reference real-world set (RTTS)</h3>
+<p>The no-reference set contains 72 real RTTS photographs (RESIDE-beta), downloaded<br>
+with <code>scripts/download_rtts.py</code> from the <code>fuhao7i/RTTS</code> mirror (Apache-2.0). RTTS has<br>
+no ground-truth clear image, so only no-reference metrics are reported: entropy gain,<br>
+RMS contrast improvement, Sobel edge-preservation ratio and colour cast.</p>
+<p><img alt="RTTS examples" src="../results/figures/qualitative_rtts.png"></p>
+<h3 id="56-baseline-fairness-audit">5.6 Baseline fairness audit</h3>
+<p>To make sure the fixed DCP baseline is not accidentally handicapped, <code>scripts/audit_baseline.py</code><br>
+re-runs it on 20 evenly spaced SOTS test images and compares the default estimator<br>
+against alternatives (<code>results/baseline_audit_summary.csv</code>):</p>
+<table>
+<thead>
+<tr>
+<th>baseline variant</th>
+<th>PSNR (dB)</th>
+<th>SSIM</th>
+<th>mean A</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>current (top-0.1% mean, guided filter r=60)</td>
+<td>15.44</td>
+<td>0.8330</td>
+<td>0.941</td>
+</tr>
+<tr>
+<td>brightest dark-channel pixel</td>
+<td>15.42</td>
+<td>0.8332</td>
+<td>0.943</td>
+</tr>
+<tr>
+<td>top-1% mean atmospheric light</td>
+<td>15.59</td>
+<td>0.8342</td>
+<td>0.934</td>
+</tr>
+<tr>
+<td>no guided filter</td>
+<td>14.59</td>
+<td>0.7752</td>
+<td>0.941</td>
+</tr>
+<tr>
+<td>native resolution (no resize/denoise)</td>
+<td>17.02</td>
+<td>0.8546</td>
+<td>0.939</td>
+</tr>
+</tbody>
+</table>
+<p>The atmospheric-light estimator and the guided filter are therefore <em>helping</em> the<br>
+baseline, not hurting it. The native-resolution variant scores higher because the shared<br>
+<code>640 px</code> preprocessing (resize + bilateral) costs about 1.6 dB on both methods; since<br>
+baseline, adaptive and ground truth all use the same preprocessing, the paired comparison<br>
+remains fair. Three visual examples are shown below.</p>
+<p><img alt="Baseline sanity check" src="../results/figures/baseline_sanity.png"></p>
+<hr>
+<h2 id="6-ablations">6. Ablations</h2>
+<p><img alt="Ablations" src="../results/figures/ablations.png"></p>
+<!-- ABLATION_TABLE_START -->
+<table>
+<thead>
+<tr>
+<th>variant</th>
+<th>group</th>
+<th>n</th>
+<th>psnr</th>
+<th>ssim</th>
+<th>entropy_gain</th>
+<th>contrast_improvement</th>
+<th>edge_preservation</th>
+<th>color_cast_out</th>
+<th>runtime_ms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>baseline_dcp</td>
+<td>baseline</td>
+<td>243</td>
+<td>15.7100</td>
+<td>0.8263</td>
+<td>0.1929</td>
+<td>1.2406</td>
+<td>1.3360</td>
+<td>0.0376</td>
+<td>69.1058</td>
+</tr>
+<tr>
+<td>adaptive_no_enh</td>
+<td>component</td>
+<td>243</td>
+<td>17.7705</td>
+<td>0.8726</td>
+<td>0.2428</td>
+<td>1.3319</td>
+<td>1.3835</td>
+<td>0.0337</td>
+<td>99.8213</td>
+</tr>
+<tr>
+<td>adaptive_clahe</td>
+<td>component</td>
+<td>243</td>
+<td>18.1839</td>
+<td>0.8850</td>
+<td>0.3697</td>
+<td>1.3173</td>
+<td>1.7287</td>
+<td>0.0339</td>
+<td>116.0220</td>
+</tr>
+<tr>
+<td>adaptive_clahe_retinex</td>
+<td>component</td>
+<td>243</td>
+<td>19.3042</td>
+<td>0.8840</td>
+<td>0.5337</td>
+<td>1.3151</td>
+<td>2.0560</td>
+<td>0.0389</td>
+<td>399.6646</td>
+</tr>
+<tr>
+<td>adaptive_full</td>
+<td>component</td>
+<td>243</td>
+<td>18.7750</td>
+<td>0.8896</td>
+<td>0.4258</td>
+<td>1.3095</td>
+<td>1.8484</td>
+<td>0.0187</td>
+<td>235.3790</td>
+</tr>
+<tr>
+<td>density_dc_only</td>
+<td>density_features</td>
+<td>243</td>
+<td>18.4767</td>
+<td>0.8831</td>
+<td>0.4121</td>
+<td>1.2985</td>
+<td>1.8218</td>
+<td>0.0185</td>
+<td>232.4757</td>
+</tr>
+<tr>
+<td>density_dc_entropy</td>
+<td>density_features</td>
+<td>243</td>
+<td>18.8355</td>
+<td>0.8901</td>
+<td>0.4276</td>
+<td>1.3099</td>
+<td>1.8496</td>
+<td>0.0183</td>
+<td>241.1430</td>
+</tr>
+<tr>
+<td>density_full</td>
+<td>density_features</td>
+<td>243</td>
+<td>18.7750</td>
+<td>0.8896</td>
+<td>0.4258</td>
+<td>1.3095</td>
+<td>1.8484</td>
+<td>0.0187</td>
+<td>235.8943</td>
+</tr>
+<tr>
+<td>selector_continuous</td>
+<td>selector</td>
+<td>243</td>
+<td>18.8002</td>
+<td>0.8574</td>
+<td>0.5385</td>
+<td>1.2317</td>
+<td>2.1860</td>
+<td>0.0170</td>
+<td>412.2332</td>
+</tr>
+<tr>
+<td>selector_classifier</td>
+<td>selector</td>
+<td>243</td>
+<td>18.4006</td>
+<td>0.8780</td>
+<td>0.4464</td>
+<td>1.3053</td>
+<td>1.8592</td>
+<td>0.0201</td>
+<td>294.0795</td>
+</tr>
+</tbody>
+</table>
+<!-- ABLATION_TABLE_END -->
+
+<p><strong>Components.</strong> Removing all enhancement lowers SSIM from 0.8896 to 0.8726 and PSNR<br>
+from 18.78 to 17.77 dB, so the enhancement chain is doing real work beyond DCP.<br>
+CLAHE alone reaches 18.18 dB / 0.8850. Adding Retinex to CLAHE raises PSNR to<br>
+19.30 dB but lowers SSIM to 0.8840, showing the expected detail/noise trade-off; the<br>
+full pipeline keeps Retinex only for moderate haze and adds gray-world, which gives<br>
+the best SSIM (0.8896) and the lowest colour cast (0.0187 vs 0.0389 for<br>
+CLAHE+Retinex). This is why the final selector does not simply enable every<br>
+enhancement for every class.</p>
+<p><strong>Density features.</strong> Dark-channel-only density reaches 18.48 dB / 0.8831; adding<br>
+entropy gives 18.84 dB / 0.8901, and adding contrast gives 18.78 dB / 0.8896. Entropy<br>
+therefore carries most of the density signal on SOTS, while contrast is close to<br>
+neutral; we keep all three because they are complementary on the beta sweep and on<br>
+real low-contrast images. The small 0.0005 SSIM difference between the<br>
+entropy-only and full score is within run-to-run and sampling noise, so we do not<br>
+claim a significant advantage for the third feature.</p>
+<p><strong>Selector.</strong> Continuous interpolation reaches 18.80 dB but only 0.8574 SSIM,<br>
+because it over-enhances some images; the depth-3 classifier reaches<br>
+18.40 dB / 0.8780, below the three-bin rule (18.78 dB / 0.8896). The three-bin<br>
+selector is therefore retained as the primary method: it is simpler, interpretable<br>
+and best on SSIM, while continuous/classifier remain useful ablations.</p>
+<hr>
+<h2 id="7-failure-cases-and-limitations">7. Failure cases and limitations</h2>
+<p><img alt="Failure cases" src="../results/figures/failure_cases.png"></p>
+<ul>
+<li><strong>Sky and white objects</strong> violate the dark-channel assumption; transmission is<br>
+  underestimated and these regions darken or shift colour.</li>
+<li><strong>Night haze</strong> has low illumination and weak colour statistics; the density score is<br>
+  less reliable.</li>
+<li><strong>Noise amplification</strong> occurs in dense haze because <code>J</code> divides by a small <code>t</code>;<br>
+  the <code>t0</code> floor trades detail for noise.</li>
+<li><strong>CLAHE/Retinex</strong> can over-sharpen texture and amplify compression artefacts.</li>
+<li><strong>RTTS</strong>: real RTTS images carry no clear ground truth, so the no-reference metrics<br>
+  only indicate whether detail/contrast entropy increase; they are not a substitute for<br>
+  paired PSNR/SSIM. The exact 72-image subset is reproducible with<br>
+<code>scripts/download_rtts.py</code>.</li>
+<li><strong>Haze class on SOTS</strong> is estimated from the density score (SOTS has no per-image<br>
+  beta label), so the per-class split is an operational definition, not ground truth.</li>
+</ul>
+<hr>
+<h2 id="8-conclusion">8. Conclusion</h2>
+<p>A density-aware classical pipeline gives a principled way to vary DCP strength and<br>
+enhancement across haze levels while remaining explainable and CPU-friendly. The<br>
+evaluation harness reports both full-reference and no-reference metrics, per-class<br>
+behaviour, ablations, runtime and failure cases, and every number is reproducible from<br>
+the committed scripts and CSVs.</p>
+<hr>
+<!-- V2_SECTION_START -->
+<h2 id="9-v2-upgrade-opt-in">9. v2 upgrade (opt-in)</h2>
+<p>v1.0 remains the default. This section describes a separate, opt-in v2 pipeline. With every v2 flag off the output is byte-identical to v1.0 (<code>tests/test_v2_compat.py</code>). All v2 knobs were fitted on the <strong>calib</strong> split only and frozen at tag <code>v2.0-frozen-params</code> before the first v2 test-split run; the v1 tables above are unchanged.</p>
+<h3 id="91-atmospheric-light-and-sky-handling">9.1 Atmospheric light and sky handling</h3>
+<p>v2 atmospheric light takes the brightest 0.5% of dark-channel pixels, rejects small connected components (&lt; 0.05% of pixels) and high-gradient pixels (&gt; 60th percentile of Sobel magnitude), then averages the survivors; if too few survive it falls back to v1. A quad-tree sky search (score = mean - std, recurse on the best quadrant) is implemented as an alternative. A conservative sky mask (bright &gt;= 0.80, smooth gradient &lt;= 0.04, connected area &gt;= 2% of the image) floors transmission at 0.25 and blends the output 25% toward the input inside the mask.</p>
+<p>Calib comparison (36 images, 29 containing sky):</p>
+<table>
+<thead>
+<tr>
+<th>method</th>
+<th>n</th>
+<th>psnr</th>
+<th>ssim</th>
+<th>objective</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v1</td>
+<td>36</td>
+<td>19.2573</td>
+<td>0.8607</td>
+<td>0.6858</td>
+</tr>
+<tr>
+<td>v2</td>
+<td>36</td>
+<td>19.3708</td>
+<td>0.8596</td>
+<td>0.6859</td>
+</tr>
+<tr>
+<td>quadtree</td>
+<td>36</td>
+<td>18.3785</td>
+<td>0.8405</td>
+<td>0.6665</td>
+</tr>
+</tbody>
+</table>
+<p>On calib the v2 airlight changes PSNR by +0.11 dB and SSIM by -0.0011 relative to v1 (objective essentially tied); the quad-tree search is -0.88 dB worse, so it is not used. The v2 gain is therefore not an average-case PSNR gain; it is a failure-case/sky intervention, which is why it is kept opt-in.</p>
+<h3 id="92-local-density-and-per-pixel-parameters">9.2 Local density and per-pixel parameters</h3>
+<p>A sliding-window density map is built from local dark-channel mean, rank entropy (disk radius 15) and local RMS contrast, normalised with calib-only statistics (<code>config/calibration_local.json</code>). The map is guided-filter smoothed (radius 15, eps 1e-3). <code>omega(x)</code> and <code>t0(x)</code> are interpolated from the three per-class values at the calibration class centroids; omega is forced non-decreasing and t0 non-increasing in density, with bounds omega in [0.70, 0.97], t0 in [0.05, 0.40]. Enhancement is blended spatially as <code>out = (1-alpha) * dehazed + alpha * enhanced</code>, <code>alpha = floor + (1-floor) * score_map</code>; calib selected <code>floor = 0.0</code>, i.e. enhancement proportional to local density.</p>
+<p><img alt="v2 density maps" src="../results/figures/v2_density_maps.png"></p>
+<h3 id="93-stronger-baselines-and-metrics">9.3 Stronger baselines and metrics</h3>
+<ul>
+<li><strong>CAP</strong> (Zhu et al., 2015): published theta coefficients, fixed <code>beta = 1.0</code>, <code>t0 = 0.10</code>; atmospheric light from the brightest 0.1% of the depth map.</li>
+<li><strong>BCCR-style</strong> (Meng et al., 2013): the dark-channel transmission is projected onto the physical boundary constraint <code>0 &lt;= J &lt;= 1</code> and refined with the guided filter. This is a simplified BCCR, not the full L1 contextual solver.</li>
+<li><strong>CIEDE2000</strong>: mean colour difference in Lab (lower is better).</li>
+<li><strong>NIQE-style</strong>: 20 MSCN statistics at two scales, multivariate Gaussian fitted on the 299 <strong>calib clear</strong> images (lower is better). The official NIQE model is not shipped.</li>
+<li><strong>FADE-style</strong>: the Choi et al. (2015) feature set (dark channel, contrast, saturation, colourfulness, entropy) with fixed documented weights (lower = clearer). The official learned FADE model is not shipped. Both no-reference indices are therefore <em>style</em> proxies and should be read as relative trends, not absolute scores.</li>
+</ul>
+<h3 id="94-test-results">9.4 Test results</h3>
+<p><strong>SOTS test (243 pairs), identical preprocessing for every method:</strong></p>
+<table>
+<thead>
+<tr>
+<th>method</th>
+<th>n</th>
+<th>psnr</th>
+<th>ssim</th>
+<th>ciede2000</th>
+<th>niqe_out</th>
+<th>fade_out</th>
+<th>entropy_gain</th>
+<th>contrast_improvement</th>
+<th>edge_preservation</th>
+<th>color_cast_out</th>
+<th>runtime_ms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>bccr</td>
+<td>243</td>
+<td>16.0186</td>
+<td>0.8309</td>
+<td>12.3553</td>
+<td>1.2665</td>
+<td>0.3753</td>
+<td>0.2013</td>
+<td>1.2669</td>
+<td>1.3483</td>
+<td>0.0362</td>
+<td>83.0597</td>
+</tr>
+<tr>
+<td>cap</td>
+<td>243</td>
+<td>18.0912</td>
+<td>0.7833</td>
+<td>9.8354</td>
+<td>2.0313</td>
+<td>0.3911</td>
+<td>0.1184</td>
+<td>1.3909</td>
+<td>1.2552</td>
+<td>0.0311</td>
+<td>38.1772</td>
+</tr>
+<tr>
+<td>dcp</td>
+<td>243</td>
+<td>15.7100</td>
+<td>0.8263</td>
+<td>12.6387</td>
+<td>1.3106</td>
+<td>0.3735</td>
+<td>0.1929</td>
+<td>1.2406</td>
+<td>1.3360</td>
+<td>0.0376</td>
+<td>59.3772</td>
+</tr>
+<tr>
+<td>v1</td>
+<td>243</td>
+<td>18.7750</td>
+<td>0.8896</td>
+<td>9.5014</td>
+<td>1.6850</td>
+<td>0.4051</td>
+<td>0.4258</td>
+<td>1.3095</td>
+<td>1.8484</td>
+<td>0.0187</td>
+<td>192.3152</td>
+</tr>
+<tr>
+<td>v2</td>
+<td>243</td>
+<td>18.4503</td>
+<td>0.8873</td>
+<td>9.3814</td>
+<td>1.7943</td>
+<td>0.4007</td>
+<td>0.3202</td>
+<td>1.3307</td>
+<td>1.5837</td>
+<td>0.0244</td>
+<td>561.7177</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Real RTTS (72 images, no ground truth):</strong></p>
+<table>
+<thead>
+<tr>
+<th>method</th>
+<th>n</th>
+<th>niqe_out</th>
+<th>fade_out</th>
+<th>entropy_gain</th>
+<th>contrast_improvement</th>
+<th>edge_preservation</th>
+<th>color_cast_out</th>
+<th>runtime_ms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>bccr</td>
+<td>72</td>
+<td>1.2476</td>
+<td>0.4448</td>
+<td>0.1113</td>
+<td>1.0772</td>
+<td>1.2025</td>
+<td>0.0259</td>
+<td>76.8597</td>
+</tr>
+<tr>
+<td>cap</td>
+<td>72</td>
+<td>1.8407</td>
+<td>0.4695</td>
+<td>-0.0564</td>
+<td>1.1775</td>
+<td>1.0864</td>
+<td>0.0225</td>
+<td>36.9873</td>
+</tr>
+<tr>
+<td>dcp</td>
+<td>72</td>
+<td>1.3766</td>
+<td>0.4451</td>
+<td>0.0912</td>
+<td>1.0648</td>
+<td>1.1967</td>
+<td>0.0263</td>
+<td>53.2229</td>
+</tr>
+<tr>
+<td>v1</td>
+<td>72</td>
+<td>1.4982</td>
+<td>0.4677</td>
+<td>0.4165</td>
+<td>1.2376</td>
+<td>1.6733</td>
+<td>0.0129</td>
+<td>131.5464</td>
+</tr>
+<tr>
+<td>v2</td>
+<td>72</td>
+<td>1.7760</td>
+<td>0.4586</td>
+<td>0.3063</td>
+<td>1.2196</td>
+<td>1.4729</td>
+<td>0.0174</td>
+<td>479.0463</td>
+</tr>
+</tbody>
+</table>
+<p><strong>SOTS indoor / outdoor split:</strong></p>
+<table>
+<thead>
+<tr>
+<th>group</th>
+<th>method</th>
+<th>n</th>
+<th>psnr</th>
+<th>ssim</th>
+<th>ciede2000</th>
+<th>niqe_out</th>
+<th>fade_out</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>indoor</td>
+<td>bccr</td>
+<td>22</td>
+<td>19.5613</td>
+<td>0.8466</td>
+<td>7.7902</td>
+<td>1.3738</td>
+<td>0.3555</td>
+</tr>
+<tr>
+<td>indoor</td>
+<td>cap</td>
+<td>22</td>
+<td>19.0741</td>
+<td>0.7827</td>
+<td>7.8376</td>
+<td>1.8844</td>
+<td>0.3776</td>
+</tr>
+<tr>
+<td>indoor</td>
+<td>dcp</td>
+<td>22</td>
+<td>19.1234</td>
+<td>0.8390</td>
+<td>8.1118</td>
+<td>1.3446</td>
+<td>0.3551</td>
+</tr>
+<tr>
+<td>indoor</td>
+<td>v1</td>
+<td>22</td>
+<td>19.8113</td>
+<td>0.8410</td>
+<td>9.1011</td>
+<td>2.3140</td>
+<td>0.3895</td>
+</tr>
+<tr>
+<td>indoor</td>
+<td>v2</td>
+<td>22</td>
+<td>20.5578</td>
+<td>0.8528</td>
+<td>7.4699</td>
+<td>2.6761</td>
+<td>0.3805</td>
+</tr>
+<tr>
+<td>outdoor</td>
+<td>bccr</td>
+<td>221</td>
+<td>15.6660</td>
+<td>0.8294</td>
+<td>12.8098</td>
+<td>1.2559</td>
+<td>0.3773</td>
+</tr>
+<tr>
+<td>outdoor</td>
+<td>cap</td>
+<td>221</td>
+<td>17.9933</td>
+<td>0.7834</td>
+<td>10.0343</td>
+<td>2.0460</td>
+<td>0.3925</td>
+</tr>
+<tr>
+<td>outdoor</td>
+<td>dcp</td>
+<td>221</td>
+<td>15.3702</td>
+<td>0.8250</td>
+<td>13.0894</td>
+<td>1.3072</td>
+<td>0.3753</td>
+</tr>
+<tr>
+<td>outdoor</td>
+<td>v1</td>
+<td>221</td>
+<td>18.6719</td>
+<td>0.8944</td>
+<td>9.5413</td>
+<td>1.6223</td>
+<td>0.4066</td>
+</tr>
+<tr>
+<td>outdoor</td>
+<td>v2</td>
+<td>221</td>
+<td>18.2405</td>
+<td>0.8907</td>
+<td>9.5717</td>
+<td>1.7066</td>
+<td>0.4027</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Paired comparison, v2 vs each method (SOTS):</strong></p>
+<table>
+<thead>
+<tr>
+<th>metric</th>
+<th>v2_vs</th>
+<th>n</th>
+<th>mean_diff (v2-other)</th>
+<th>win rate (better)</th>
+<th>p (Wilcoxon)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>psnr</td>
+<td>dcp</td>
+<td>243</td>
+<td>2.7404</td>
+<td>0.9753</td>
+<td>&lt;0.0001</td>
+</tr>
+<tr>
+<td>psnr</td>
+<td>cap</td>
+<td>243</td>
+<td>0.3591</td>
+<td>0.5432</td>
+<td>0.0926</td>
+</tr>
+<tr>
+<td>psnr</td>
+<td>bccr</td>
+<td>243</td>
+<td>2.4317</td>
+<td>0.9259</td>
+<td>&lt;0.0001</td>
+</tr>
+<tr>
+<td>psnr</td>
+<td>v1</td>
+<td>243</td>
+<td>-0.3247</td>
+<td>0.3827</td>
+<td>0.0002</td>
+</tr>
+<tr>
+<td>ssim</td>
+<td>dcp</td>
+<td>243</td>
+<td>0.0610</td>
+<td>0.9506</td>
+<td>&lt;0.0001</td>
+</tr>
+<tr>
+<td>ssim</td>
+<td>cap</td>
+<td>243</td>
+<td>0.1040</td>
+<td>0.7695</td>
+<td>&lt;0.0001</td>
+</tr>
+<tr>
+<td>ssim</td>
+<td>bccr</td>
+<td>243</td>
+<td>0.0563</td>
+<td>0.9259</td>
+<td>&lt;0.0001</td>
+</tr>
+<tr>
+<td>ssim</td>
+<td>v1</td>
+<td>243</td>
+<td>-0.0023</td>
+<td>0.4938</td>
+<td>0.4416</td>
+</tr>
+<tr>
+<td>ciede2000</td>
+<td>dcp</td>
+<td>243</td>
+<td>-3.2573</td>
+<td>0.9342</td>
+<td>&lt;0.0001</td>
+</tr>
+<tr>
+<td>ciede2000</td>
+<td>cap</td>
+<td>243</td>
+<td>-0.4540</td>
+<td>0.5679</td>
+<td>0.0134</td>
+</tr>
+<tr>
+<td>ciede2000</td>
+<td>bccr</td>
+<td>243</td>
+<td>-2.9739</td>
+<td>0.8930</td>
+<td>&lt;0.0001</td>
+</tr>
+<tr>
+<td>ciede2000</td>
+<td>v1</td>
+<td>243</td>
+<td>-0.1201</td>
+<td>0.5514</td>
+<td>0.2341</td>
+</tr>
+<tr>
+<td>niqe_out</td>
+<td>dcp</td>
+<td>243</td>
+<td>0.4837</td>
+<td>0.5185</td>
+<td>0.0013</td>
+</tr>
+<tr>
+<td>niqe_out</td>
+<td>cap</td>
+<td>243</td>
+<td>-0.2370</td>
+<td>0.5514</td>
+<td>0.0218</td>
+</tr>
+<tr>
+<td>niqe_out</td>
+<td>bccr</td>
+<td>243</td>
+<td>0.5278</td>
+<td>0.4691</td>
+<td>&lt;0.0001</td>
+</tr>
+<tr>
+<td>niqe_out</td>
+<td>v1</td>
+<td>243</td>
+<td>0.1094</td>
+<td>0.3992</td>
+<td>0.0541</td>
+</tr>
+<tr>
+<td>fade_out</td>
+<td>dcp</td>
+<td>243</td>
+<td>0.0273</td>
+<td>0.0247</td>
+<td>&lt;0.0001</td>
+</tr>
+<tr>
+<td>fade_out</td>
+<td>cap</td>
+<td>243</td>
+<td>0.0096</td>
+<td>0.3580</td>
+<td>&lt;0.0001</td>
+</tr>
+<tr>
+<td>fade_out</td>
+<td>bccr</td>
+<td>243</td>
+<td>0.0254</td>
+<td>0.0165</td>
+<td>&lt;0.0001</td>
+</tr>
+<tr>
+<td>fade_out</td>
+<td>v1</td>
+<td>243</td>
+<td>-0.0044</td>
+<td>0.5597</td>
+<td>0.0005</td>
+</tr>
+</tbody>
+</table>
+<p><strong>v2 vs v1.</strong> v2 changes PSNR by <strong>-0.32 dB</strong> (p = 0.0002), SSIM by <strong>-0.0023</strong> (p = 0.4416), CIEDE2000 by <strong>-0.120</strong> (lower better; p = 0.2341), NIQE by <strong>+0.109</strong> (lower better; p = 0.0541) and FADE by <strong>-0.0044</strong> (lower better; p = 0.0005). So v2 is <strong>not</strong> an aggregate improvement over v1: it loses a small but significant amount of PSNR, is statistically tied on SSIM and CIEDE2000, is slightly worse on NIQE and slightly better on FADE. The honest conclusion is that the three v2 upgrades did not generalise from calib to the SOTS test average.</p>
+<p><strong>Indoor vs outdoor.</strong> v2 helps the 22 indoor pairs (+0.75 dB PSNR, +0.0118 SSIM) but hurts the 221 outdoor pairs (-0.43 dB PSNR, -0.0037 SSIM). The sky/local intervention is plausible for indoor scenes with large bright regions; outdoor scenes dominate the average and are where the sky mask and local map most often over- or under-correct. The indoor subset is small (n = 22), so this split is descriptive, not a powered test.</p>
+<p><strong>Stronger baselines.</strong> CAP is a much stronger PSNR baseline than fixed DCP (18.09 dB vs 15.71 dB), although its SSIM is lower (0.7833). Against CAP, v2 gains +0.36 dB PSNR (p = 0.0926; not significant at 0.05), +0.1040 SSIM and -0.454 CIEDE2000. BCCR-style is weaker on PSNR/SSIM but has the best NIQE on both SOTS and RTTS, i.e. it is the most 'natural' but under-enhances detail. The adaptive advantage is therefore mostly structural/colour, not raw PSNR, once a stronger baseline is included.</p>
+<p><strong>Brightness/colour diagnostic (not a result).</strong> Matching each output's per-channel mean/std to the GT before PSNR raises v1 by 3.11 dB and v2 by 3.80 dB; after matching, v2 is +0.37 dB relative to v1. This indicates that part of v2's raw PSNR loss is a global brightness/colour shift rather than lost structure. It is diagnostic only and is not used in any headline claim.</p>
+<p><strong>RTTS.</strong> v1 remains stronger on entropy gain (0.4165 vs 0.3063) and edge preservation (1.6733 vs 1.4729); v2 has a slightly lower FADE (0.4586 vs 0.4677) but a higher NIQE (1.7760 vs 1.4982) and more colour cast (0.0174 vs 0.0129). No single method wins every no-reference metric.</p>
+<h3 id="95-ablation-one-step-at-a-time">9.5 Ablation: one step at a time</h3>
+<p><img alt="v2 ablations" src="../results/figures/v2_ablations.png"></p>
+<table>
+<thead>
+<tr>
+<th>variant</th>
+<th>n</th>
+<th>psnr</th>
+<th>ssim</th>
+<th>ciede2000</th>
+<th>niqe_out</th>
+<th>fade_out</th>
+<th>runtime_ms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v1</td>
+<td>243</td>
+<td>18.7750</td>
+<td>0.8896</td>
+<td>9.5014</td>
+<td>1.6850</td>
+<td>0.4051</td>
+<td>228.0575</td>
+</tr>
+<tr>
+<td>v2_airlight</td>
+<td>243</td>
+<td>18.8786</td>
+<td>0.8895</td>
+<td>9.4457</td>
+<td>1.7225</td>
+<td>0.4045</td>
+<td>240.7161</td>
+</tr>
+<tr>
+<td>v2_airlight_sky</td>
+<td>243</td>
+<td>19.4101</td>
+<td>0.8933</td>
+<td>8.9904</td>
+<td>1.8043</td>
+<td>0.4067</td>
+<td>268.6254</td>
+</tr>
+<tr>
+<td>v2_local_omega</td>
+<td>243</td>
+<td>18.5439</td>
+<td>0.8815</td>
+<td>9.6375</td>
+<td>1.8966</td>
+<td>0.4061</td>
+<td>666.2347</td>
+</tr>
+<tr>
+<td>v2_local_enhance</td>
+<td>243</td>
+<td>18.4503</td>
+<td>0.8873</td>
+<td>9.3814</td>
+<td>1.7943</td>
+<td>0.4007</td>
+<td>679.6421</td>
+</tr>
+<tr>
+<td>v2_full</td>
+<td>243</td>
+<td>18.4503</td>
+<td>0.8873</td>
+<td>9.3814</td>
+<td>1.7943</td>
+<td>0.4007</td>
+<td>678.1471</td>
+</tr>
+</tbody>
+</table>
+<p>Step deltas (PSNR / SSIM): +airlight +0.10 dB / -0.0001; +sky +0.53 dB / +0.0038; +local omega -0.87 dB / -0.0119; +local enhancement -0.09 dB / +0.0058. The full row has the same metrics as the local-enhancement row (only timing noise differs); fast Retinex was rejected on calib (see §9.7), so the two metric rows are identical.</p>
+<p>The sky step is the only component that improves both PSNR and SSIM: airlight+sky alone reaches 19.41 dB / 0.8933 (+0.64 dB / +0.0037 vs v1). The local omega/t0 maps as configured lose 0.87 dB and 0.0119 SSIM; the enhancement blend recovers SSIM but not PSNR. This is why full v2 ends below v1 even though the sky stage alone would be above it. Because dropping the local maps after seeing this test ablation would be test-set tuning, the frozen full-v2 config is kept and the v2-light variant is reported only as a direction for future work.</p>
+<h3 id="96-density-validation">9.6 Density validation</h3>
+<table>
+<thead>
+<tr>
+<th>signal</th>
+<th>vs beta (validation)</th>
+<th>within-scene</th>
+<th>vs FADE (RTTS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>global</td>
+<td>0.907</td>
+<td>0.992</td>
+<td>0.933</td>
+</tr>
+<tr>
+<td>local_mean</td>
+<td>0.948</td>
+<td>1.000</td>
+<td>0.817</td>
+</tr>
+<tr>
+<td>dc_only</td>
+<td>0.928</td>
+<td></td>
+<td>0.762</td>
+</tr>
+<tr>
+<td>dc_entropy</td>
+<td>0.917</td>
+<td></td>
+<td>0.904</td>
+</tr>
+<tr>
+<td>contrast_std</td>
+<td>-0.780</td>
+<td></td>
+<td>-0.611</td>
+</tr>
+<tr>
+<td>ridge</td>
+<td>0.925</td>
+<td>1.000</td>
+<td>0.969</td>
+</tr>
+</tbody>
+</table>
+<p>Local density is the best single signal on the beta sweep (0.948 vs 0.907 global, 0.948 best fixed); within-scene it is monotone (1.000 vs 0.992). On real RTTS the ordering flips: global density correlates better with FADE (0.933 vs 0.817), while the calib-fitted ridge weights are best (0.969). The ridge weights beat the global score on the beta sweep by +0.017 but not the local mean, so we report them as an experiment, not as the shipped density estimator. <code>contrast_std</code> is raw contrast (higher = clearer), hence its negative sign; the score uses <code>1 - normalised contrast</code>.</p>
+<h3 id="97-runtime-and-trade-offs">9.7 Runtime and trade-offs</h3>
+<table>
+<thead>
+<tr>
+<th>method</th>
+<th>SOTS ms</th>
+<th>RTTS ms</th>
+<th>x v1</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>bccr</td>
+<td>83.0597</td>
+<td>76.8597</td>
+<td>0.4319</td>
+</tr>
+<tr>
+<td>cap</td>
+<td>38.1772</td>
+<td>36.9873</td>
+<td>0.1985</td>
+</tr>
+<tr>
+<td>dcp</td>
+<td>59.3772</td>
+<td>53.2229</td>
+<td>0.3087</td>
+</tr>
+<tr>
+<td>v1</td>
+<td>192.3152</td>
+<td>131.5464</td>
+<td>1.0000</td>
+</tr>
+<tr>
+<td>v2</td>
+<td>561.7177</td>
+<td>479.0463</td>
+<td>2.9208</td>
+</tr>
+</tbody>
+</table>
+<p>v2 takes <strong>562 ms/image</strong> on SOTS versus <strong>192 ms</strong> for v1 and <strong>59 ms</strong> for fixed DCP. (The v1 runtime in this common run is 192 ms; \S5 reports 256 ms from the v1-only run. Both figures are from committed scripts; only relative conclusions are used.) The main extra cost is the local density map (rank entropy + local statistics), which is computed once per image and reused by the omega/t0 interpolation and the enhancement blend. Fast Retinex was implemented (guided-filter illumination on a half-resolution copy) and rejected: on calib it lost 0.31 dB PSNR and 0.0042 SSIM for only ~40 ms (8%).</p>
+<h3 id="98-limitations-of-v2">9.8 Limitations of v2</h3>
+<ul>
+<li>v2 does <strong>not</strong> beat v1 on aggregate SOTS PSNR/SSIM; v1 remains the recommended default.</li>
+<li>The indoor gain is based on 22 pairs only; outdoor scenes dominate and show a loss.</li>
+<li>NIQE-style and FADE-style are locally fitted / fixed-weight proxies, not the official learned models; they are useful for relative trends only.</li>
+<li>CAP is a strong PSNR baseline; BCCR-style is simplified (boundary constraint + guided filter), not the full L1 contextual solver.</li>
+<li>The airlight/sky knobs were tuned on 36 calib images (29 with sky), so the tuning set is small and may not cover all outdoor sky types.</li>
+<li>v2 is ~2.9x slower than v1 and ~9x slower than fixed DCP on CPU.</li>
+</ul>
+<!-- V2_SECTION_END -->
+
+<h2 id="references">References</h2>
+<ol>
+<li>K. He, J. Sun, X. Tang. Single Image Haze Removal Using Dark Channel Prior. CVPR 2009.</li>
+<li>K. He, J. Sun, X. Tang. Guided Image Filtering. ECCV 2010.</li>
+<li>K. Zuiderveld. Contrast Limited Adaptive Histogram Equalization. Graphics Gems IV, 1994.</li>
+<li>D. J. Jobson, Z. Rahman, G. A. Woodell. A Multiscale Retinex for Bridging the Gap<br>
+   Between Color Image and Human Vision. IEEE TIP, 1997.</li>
+<li>B. Li et al. Benchmarking Single-Image Dehazing and Beyond. IEEE TIP, 2019.</li>
+<li>Q. Zhu, J. Mai, L. Shao. A Fast Single Image Haze Removal Algorithm Using Color<br>
+   Attenuation Prior. IEEE TIP, 2015.</li>
+<li>G. Meng, Y. Wang, J. Duan, S. Xiang, C. Pan. Efficient Image Dehazing with Boundary<br>
+   Constraint and Contextual Regularization. ICCV, 2013.</li>
+<li>G. Sharma, W. Wu, E. N. Dalal. The CIEDE2000 Color-Difference Formula: Implementation<br>
+   Notes, Supplementary Test Data, and Mathematical Observations. Color Research &amp;<br>
+   Application, 2005.</li>
+<li>A. Mittal, R. Soundararajan, A. C. Bovik. Making a "Completely Blind" Image Quality<br>
+   Analyzer. IEEE Signal Processing Letters, 2013.</li>
+<li>L. K. Choi, J. You, A. C. Bovik. Referenceless Prediction of Perceptual Fog Density<br>
+    and Perceptual Image Defogging. IEEE TIP, 2015.</li>
+</ol>
+</body>
+</html>

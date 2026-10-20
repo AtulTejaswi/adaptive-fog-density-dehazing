@@ -27,7 +27,7 @@ from src.metrics import no_reference_metrics  # noqa: E402
 from src.pipeline import dehaze_adaptive, dehaze_adaptive_v2  # noqa: E402
 from src.preprocess import preprocess_array  # noqa: E402
 
-st.set_page_config(page_title="Adaptive Fog-Density-Aware Dehazing",
+st.set_page_config(page_title="FogSense — Adaptive Haze Removal",
                    page_icon="🌫️", layout="wide")
 
 CLASS_BADGE = {"light": "🟢 light", "moderate": "🟡 moderate", "heavy": "🔴 heavy"}
@@ -90,7 +90,7 @@ def main() -> None:
         st.caption("v2 knobs are fitted on the calib split only. With v2 off the "
                    "pipeline is byte-identical to v1.0.")
         show_maps = st.checkbox("Show transmission map", value=True)
-        run = st.button("Dehaze", type="primary", use_container_width=True)
+        run = st.button("Dehaze", type="primary", width="stretch")
 
     source = None
     if uploaded is not None:
@@ -171,10 +171,10 @@ def main() -> None:
     with tab1:
         if v2_out is not None:
             c1, c2, c3, c4 = st.columns(4)
-            c1.image(_to_display(hazy), caption="Input (preprocessed)", use_container_width=True)
-            c2.image(_to_display(baseline), caption="Baseline: fixed DCP", use_container_width=True)
-            c3.image(_to_display(adaptive), caption="v1 adaptive (default)", use_container_width=True)
-            c4.image(_to_display(v2_out), caption="v2 adaptive (opt-in)", use_container_width=True)
+            c1.image(_to_display(hazy), caption="Input (preprocessed)", width="stretch")
+            c2.image(_to_display(baseline), caption="Baseline: fixed DCP", width="stretch")
+            c3.image(_to_display(adaptive), caption="v1 adaptive (default)", width="stretch")
+            c4.image(_to_display(v2_out), caption="v2 adaptive (opt-in)", width="stretch")
             d1, d2 = st.columns(2)
             d1.download_button("Download v1 result", _download_bytes(adaptive),
                                file_name="dehazed_v1.png", mime="image/png")
@@ -182,9 +182,9 @@ def main() -> None:
                                file_name="dehazed_v2.png", mime="image/png")
         else:
             c1, c2, c3 = st.columns(3)
-            c1.image(_to_display(hazy), caption="Input (preprocessed)", use_container_width=True)
-            c2.image(_to_display(baseline), caption="Baseline: fixed DCP", use_container_width=True)
-            c3.image(_to_display(adaptive), caption="Adaptive (this work)", use_container_width=True)
+            c1.image(_to_display(hazy), caption="Input (preprocessed)", width="stretch")
+            c2.image(_to_display(baseline), caption="Baseline: fixed DCP", width="stretch")
+            c3.image(_to_display(adaptive), caption="Adaptive (this work)", width="stretch")
             st.download_button("Download adaptive result", _download_bytes(adaptive),
                                file_name="dehazed_adaptive.png", mime="image/png")
 
@@ -193,7 +193,7 @@ def main() -> None:
         if show_maps:
             t = np.clip(info["transmission"], 0, 1)
             c1.image(t, caption=f"Transmission map (mean t = {info['mean_transmission']:.2f})",
-                     clamp=True, use_container_width=True)
+                     clamp=True, width="stretch")
         rows = [
             {"parameter": "class", "value": info["class"]},
             {"parameter": "omega", "value": f"{info['params']['omega']:.3f}"},
@@ -206,7 +206,8 @@ def main() -> None:
             {"parameter": "gray-world strength", "value": info["params"]["gray_world"].get("strength")},
             {"parameter": "atmospheric light A", "value": ", ".join(f"{v:.3f}" for v in info["airlight"])},
         ]
-        c2.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        rows = [{"parameter": r["parameter"], "value": str(r["value"])} for r in rows]
+        c2.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
         st.json({"density features": info["features"],
                  "normalised": info["normalised"],
                  "timing_ms": info["timing_ms"]})
@@ -221,7 +222,7 @@ def main() -> None:
                 {"parameter": "local density", "value": str(bool(v2_info["v2"]["local_density"]))},
                 {"parameter": "local enhancement", "value": str(bool(v2_info["v2"]["local_enhance"]))},
             ]
-            st.dataframe(pd.DataFrame(v2_rows), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(v2_rows), hide_index=True, width="stretch")
 
     with tab3:
         if v2_info is None:
@@ -233,17 +234,17 @@ def main() -> None:
             sky = v2_info.get("sky_mask")
             if score_map is not None:
                 c1.image(np.clip(score_map, 0, 1), caption="Local density score",
-                         clamp=True, use_container_width=True)
+                         clamp=True, width="stretch")
             if omega_map is not None:
                 c2.image(np.clip(omega_map, 0, 1), caption="omega(x)",
-                         clamp=True, use_container_width=True)
+                         clamp=True, width="stretch")
             if sky is not None:
                 overlay = np.clip(hazy, 0, 1).copy()
                 if sky.any():
                     overlay[sky] = 0.5 * overlay[sky] + 0.5 * np.array([0.1, 0.8, 0.2],
                                                                        dtype=np.float32)
                 c3.image(overlay, caption=f"Sky mask ({int(sky.sum())} px)",
-                         clamp=True, use_container_width=True)
+                         clamp=True, width="stretch")
             st.json({"v2 flags": v2_info.get("v2"),
                      "timing_ms": v2_info.get("timing_ms")})
 
@@ -268,7 +269,7 @@ def main() -> None:
         table = pd.DataFrame(rows)
         st.dataframe(table.style.format({k: "{:.4f}" for k in ("baseline", "adaptive", "v2")
                                          if k in table.columns}),
-                     hide_index=True, use_container_width=True)
+                     hide_index=True, width="stretch")
         st.caption("No-reference metrics are shown because an uploaded image has no ground truth.")
 
 

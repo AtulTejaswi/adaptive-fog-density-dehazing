@@ -16,8 +16,7 @@ density-aware, multi-algorithm framework that estimates a fog-density score from
 image statistics, selects a light / moderate / heavy strategy, applies Dark Channel Prior
 (DCP) dehazing with class-specific parameters refined by a guided filter, and then
 optionally applies Retinex illumination correction, CLAHE and gray-world colour
-correction. We compare
-the adaptive pipeline against a fixed-parameter DCP baseline. On 243 held-out SOTS
+correction. We compare the adaptive pipeline against a fixed-parameter DCP baseline. On 243 held-out SOTS
 pairs the adaptive pipeline improves PSNR from 15.71 dB to 18.78 dB and SSIM from
 0.8263 to 0.8896, with a 96.3% PSNR win rate and improvements in every estimated haze
 class. We also report a no-reference real-world RTTS set, component/feature/selector
@@ -496,7 +495,7 @@ Local density is the best single signal on the beta sweep (0.948 vs 0.907 global
 | v1 | 192.3152 | 131.5464 | 1.0000 |
 | v2 | 561.7177 | 479.0463 | 2.9208 |
 
-v2 takes **562 ms/image** on SOTS versus **192 ms** for v1 and **59 ms** for fixed DCP. The main extra cost is the local density map (rank entropy + local statistics), which is computed once per image and reused by the omega/t0 interpolation and the enhancement blend. Fast Retinex was implemented (guided-filter illumination on a half-resolution copy) and rejected: on calib it lost 0.31 dB PSNR and 0.0042 SSIM for only ~40 ms (8%).
+v2 takes **562 ms/image** on SOTS versus **192 ms** for v1 and **59 ms** for fixed DCP. (The v1 runtime in this common run is 192 ms; \S5 reports 256 ms from the v1-only run. Both figures are from committed scripts; only relative conclusions are used.) The main extra cost is the local density map (rank entropy + local statistics), which is computed once per image and reused by the omega/t0 interpolation and the enhancement blend. Fast Retinex was implemented (guided-filter illumination on a half-resolution copy) and rejected: on calib it lost 0.31 dB PSNR and 0.0042 SSIM for only ~40 ms (8%).
 
 ### 9.8 Limitations of v2
 
