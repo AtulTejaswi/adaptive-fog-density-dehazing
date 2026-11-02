@@ -58,10 +58,13 @@ python scripts/download_data.py && python scripts/download_rtts.py
 python scripts/prepare_data.py --no-download
 
 # 3. calibrate -> tune -> evaluate -> ablate -> figures -> report -> tests
-./run_all.ps1 --no-download
+./run_all.ps1 --no-download                                    # Windows (PowerShell)
+source .venv/bin/activate && ./scripts/run_all.sh --no-download  # Linux/macOS
 ```
 
-Or run the stages individually:
+Or run the stages individually. On Linux/macOS activate the environment first
+(`source .venv/bin/activate`) so the bare `python`/`pip` below resolve to the venv;
+on Windows run them in an activated venv or just use `run_all.ps1`.
 
 ```bash
 pip install -r requirements.txt
@@ -81,8 +84,55 @@ python -m pytest                        # full test suite (83 tests)
 Demo:
 
 ```bash
-streamlit run app/app.py
+streamlit run app/app.py                              # with the venv activated
+.venv/bin/streamlit run app/app.py                    # without activating
+.venv/bin/streamlit run app/app.py --server.port 8502 # if 8501 is already taken
 ```
+
+The default port is 8501; pass `--server.port <free port>` if another Streamlit
+instance is already serving on it.
+
+## Run locally on Linux/macOS
+
+Verified on Ubuntu with Python 3.14 in `.venv`: real SOTS + RTTS download, splits,
+the v1 pipeline and the demo all run from these commands. All commands below assume the
+repository root as the working directory.
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+
+# data (see data/README.md): ~435 MB SOTS zip + 72 RTTS images
+.venv/bin/python scripts/download_data.py
+.venv/bin/python scripts/download_rtts.py
+.venv/bin/python scripts/prepare_data.py --no-download
+
+# check that every path in data/splits.json resolves (read-only)
+.venv/bin/python scripts/check_data.py
+
+# full v1 pipeline; scripts/run_all_v2.sh is the v2 equivalent
+./scripts/run_all.sh --no-download
+
+# demo
+.venv/bin/streamlit run app/app.py
+```
+
+`scripts/run_all.sh` and `scripts/run_all_v2.sh` mirror `run_all.ps1` /
+`run_all_v2.ps1` step for step and call `.venv/bin/python` by default (override with
+`PYTHON=/path/to/python`).
+
+`scripts/run_all.sh` is the canonical Linux/macOS entry point. The older root-level
+`run_all.sh` is kept for history but omits `audit_baseline.py` and calls a bare `python`;
+prefer `./scripts/run_all.sh`.
+
+Both `run_all.sh` and `run_all_v2.sh` **regenerate and overwrite** `results/` (and
+`config/calibration.json`, `config/tuned_params.json`, `data/splits.json`). Run
+`git status` and `git diff --stat` afterwards, and do not commit regenerated artifacts
+unless that is the intent.
+
+`scripts/prepare_data.py` likewise rewrites the tracked `data/splits.json`. The output is
+numerically identical (same record IDs and counts; only the `created` date changes), so if
+you do not want that diff run `git checkout data/splits.json` afterwards.
 
 ## Data
 
